@@ -1,13 +1,12 @@
 import wasi "wasi";
 import mem "mem";
-import vector "vector";
 
 fn print_str(p: [*]u8) {
   let len = strlen(p);
   let iovec = mem::alloc::<wasi::IoVec>();
   iovec.* = wasi::IoVec{
     len: len,
-    p: p,
+    p:   p,
   };
 
   wasi::fd_write(1, iovec, 1, 0 as *i32);
@@ -38,12 +37,13 @@ fn print_i64(val: i64) {
     return;
   }
 
-  let str = mem::alloc::<vector::Vector<u8>>();
-  vector::init_with_cap::<u8>(str, 10);
+  let str = mem::alloc_array::<u8>(10);
+  let str_n: usize = 0;
 
   let start: usize = 0;
   if val < 0 {
-    vector::push::<u8>(str, 45); // ascii for '-'
+    str[str_n].* = 45; // ascii for '-'
+    str_n = str_n + 1;
     start = 1;
   }
 
@@ -52,23 +52,25 @@ fn print_i64(val: i64) {
     if d < 0 {
       d = -d;
     }
-    vector::push::<u8>(str, 48 + d as u8); // ascii for '0'
+    str[str_n].* = 48 + d as u8; // 48 is ascii for '0'
+    str_n = str_n + 1;
     val = val / 10;
   }
 
   let i: usize = start;
-  let j = vector::len::<u8>(str) as usize - 1;
+  let j = str_n - 1;
   while i < j {
-    let tmp = vector::get::<u8>(str, i);
-    vector::set::<u8>(str, i, vector::get::<u8>(str, j));
-    vector::set::<u8>(str, j, tmp);
+    let tmp = str[i].*;
+    str[i].* = str[j].*;
+    str[j].* = tmp;
     i = i + 1;
     j = j - 1;
   }
 
-  vector::push::<u8>(str, 0);
-  print_str(str.arr.*);
-  mem::dealloc::<vector::Vector<u8>>(str);
+  str[str_n].* = 0;
+  str_n = str_n + 1;
+  print_str(str);
+  mem::dealloc_array::<u8>(str);
 }
 
 fn print_u64(val: u64) {
@@ -77,31 +79,33 @@ fn print_u64(val: u64) {
     return;
   }
 
-  let str = mem::alloc::<vector::Vector<u8>>();
-  vector::init_with_cap::<u8>(str, 10);
+  let str = mem::alloc_array::<u8>(10);
+  let str_n: usize = 0;
 
   while val != 0 {
     let d = val % 10;
     if d < 0 {
       d = -d;
     }
-    vector::push::<u8>(str, 48 + d as u8); // ascii for '0'
+    str[str_n].* = 48 + d as u8; // ascii for '0'
+    str_n = str_n + 1;
     val = val / 10;
   }
 
   let i: usize = 0;
-  let j = vector::len::<u8>(str) as usize - 1;
+  let j = str_n - 1;
   while i < j {
-    let tmp = vector::get::<u8>(str, i);
-    vector::set::<u8>(str, i, vector::get::<u8>(str, j));
-    vector::set::<u8>(str, j, tmp);
+    let tmp = str[i].*;
+    str[i].* = str[j].*;
+    str[j].* = str[i].*;
     i = i + 1;
     j = j - 1;
   }
 
-  vector::push::<u8>(str, 0);
-  print_str(str.arr.*);
-  mem::dealloc::<vector::Vector<u8>>(str);
+  str[str_n].* = 0;
+  str_n = str_n + 1;
+  print_str(str);
+  mem::dealloc_array::<u8>(str);
 }
 
 
