@@ -1,17 +1,11 @@
 import mem "mem";
 
-let ram: [*]u8 = mem::alloc_array::<u8>(0x800);
+let ram: [*]u8 = mem::alloc_array::<u8>(0xffff);
 
 fn read(addr: u16): u8 {
-  if addr < 0x2000 {
-    return ram[addr & 0x7ff].*;
-  }
-  return 0;
+  return ram[addr].*;
 }
 
 fn write(addr: u16, data: u8) {
-  if addr < 0x2000 {
-    ram[addr & 0x7ff].* = data;
-  }
-  return;
+  ram[addr].* = data;
 }

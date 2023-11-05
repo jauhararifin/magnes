@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+      <title>Magnes - Magelang NES Emulator</title>
+      <meta charset="utf-8" />
+      <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE">
+      <META HTTP-EQUIV="EXPIRES" CONTENT="Mon, 22 Jul 2002 11:12:01 GMT">
+      <style>
+        #canvas {
+          position: absolute;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          width: 400px;
+          height: 400px;
+          image-rendering: optimizeSpeed;
+          image-rendering: -moz-crisp-edges;
+          image-rendering: -webkit-optimize-contrast;
+          image-rendering: -o-crisp-edges;
+          image-rendering: crisp-edges;
+          -ms-interpolation-mode: nearest-neighbor;
+        }
+      </style>
+  </head>
+  <body>
+    <div>
+      <div>
+        <input type="file" id="romInput" name="myFile">
+        <button id="playButton">Play</button>
+      </div>
+      <canvas id="canvas"></canvas>
+    </div>
+    <script src="/main.js"></script>
+  </body>
+</html>
+
+

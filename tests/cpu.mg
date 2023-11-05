@@ -9,6 +9,10 @@ fn main() {
   fmt::print_str("Running test1\n");
   test1();
   fmt::print_str("Passed\n");
+
+  fmt::print_str("Running test2\n");
+  test2();
+  fmt::print_str("Passed\n");
 }
 
 fn test1() {
@@ -45,5 +49,16 @@ fn load_ram(data: [*]u8, size: usize) {
   while i < size {
     bus::ram[i].* = data[i].*;
     i = i + 1;
+  }
+}
+
+fn test2() {
+  let pc: u16 = 0x6cc;
+  let operand: u8 = 0xf9;
+  let result: u16 = ((operand as i8) as u16) + pc + 1;
+  if result != 0x6c6 {
+    fmt::print_u16(result);
+    fmt::print_str("\n");
+    wasm::trap();
   }
 }
