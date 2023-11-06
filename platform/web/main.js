@@ -21,10 +21,27 @@ window.onload = async function() {
 
   const resp = await fetch('/nes.wasm')
   const bytes = await resp.arrayBuffer()
+  let memoryBuffer;
+  let debuggingBuffer = "";
   const module = await WebAssembly.instantiate(bytes, {
-    // TODO: remove WASI related imports
     wasi_snapshot_preview1: {
-      fd_write: () => console.log('fd_write_called'),
+      fd_write: (fd, iovec, count, result) => {
+        for (let i = 0; i < count; i++) {
+          const buff = new Uint32Array(memoryBuffer, iovec + 2*i, 2);
+          const p = buff[0]
+          const len = buff[1]
+
+          const stringBytes = new Uint8Array(memoryBuffer, p, len);
+          const text = new TextDecoder().decode(stringBytes);
+          debuggingBuffer += text
+          const x = debuggingBuffer.indexOf("\n");
+          if (x > -1) {
+            console.log(debuggingBuffer.substr(0, x))
+            debuggingBuffer = debuggingBuffer.substr(x + 1)
+          }
+          // debugText.value += text
+        }
+      }
     },
   })
   const {
@@ -41,20 +58,9 @@ window.onload = async function() {
     getFrameBuffer,
     debugCPU,
   } = module.instance.exports;
-  const memoryBuffer = memory.buffer
+  memoryBuffer = memory.buffer
 
   document.addEventListener('keyup', (event) => {
-    if (event.key === 'ArrowUp')
-      onKeydownArrowUp();
-    else if (event.key === 'ArrowRight')
-      onKeydownArrowRight();
-    else if (event.key === 'ArrowLeft')
-      onKeydownArrowLeft();
-    else if (event.key === 'ArrowDown')
-      onKeydownArrowDown();
-  });
-
-  document.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowUp')
       onKeyupArrowUp();
     else if (event.key === 'ArrowRight')
@@ -63,6 +69,17 @@ window.onload = async function() {
       onKeyupArrowLeft();
     else if (event.key === 'ArrowDown')
       onKeyupArrowDown();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowUp')
+      onKeydownArrowUp();
+    else if (event.key === 'ArrowRight')
+      onKeydownArrowRight();
+    else if (event.key === 'ArrowLeft')
+      onKeydownArrowLeft();
+    else if (event.key === 'ArrowDown')
+      onKeydownArrowDown();
   });
 
   function getCPU() {
@@ -97,15 +114,10 @@ window.onload = async function() {
   function frame() {
     if (playing) {
       const currentTime = performance.now();
-      // console.log({lastExecuted, currentTime})
       while ((lastExecuted + interval) <= currentTime) {
         tick()
-        const x = getCPU()
-        if (x.lastAddr[0] >= 0x200 && x.lastAddr[0] < 0x600)
-          console.debug('CPU after', x)
         lastExecuted += interval
       }
-      // console.log('-------------------------------------------------')
 
       const framebuffer = getFrameBuffer()
       const buff = new Uint8Array(memoryBuffer);
@@ -156,7 +168,6 @@ window.onload = async function() {
       const offset = getRom()
       const target = new Uint8Array(memoryBuffer)
       target.set(byteArray, offset)
-      // console.log('jauhar', offset.toString(16), getRam().toString(16), target[getRam() + 0x600])
       reset();
 
       playing = true;

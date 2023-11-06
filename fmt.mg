@@ -83,13 +83,14 @@ fn print_u64(val: u64) {
   let str_n: usize = 0;
 
   while val != 0 {
-    let d = val % 10;
-    if d < 0 {
-      d = -d;
+    let d = val % 16;
+    if d > 9 {
+      str[str_n].* = 97 + (d as u8) - 10; // ascii for 'a'
+    } else {
+      str[str_n].* = 48 + (d as u8); // ascii for '0'
     }
-    str[str_n].* = 48 + d as u8; // ascii for '0'
     str_n = str_n + 1;
-    val = val / 10;
+    val = val / 16;
   }
 
   let i: usize = 0;
@@ -97,13 +98,14 @@ fn print_u64(val: u64) {
   while i < j {
     let tmp = str[i].*;
     str[i].* = str[j].*;
-    str[j].* = str[i].*;
+    str[j].* = tmp;
     i = i + 1;
     j = j - 1;
   }
 
   str[str_n].* = 0;
   str_n = str_n + 1;
+  print_str("0x");
   print_str(str);
   mem::dealloc_array::<u8>(str);
 }

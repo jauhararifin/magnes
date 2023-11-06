@@ -1,6 +1,7 @@
 import mem "mem";
 import bus "bus";
 import cpu "cpu";
+import fmt "fmt";
 
 let the_cpu: *cpu::CPU = init_cpu();
 

@@ -331,8 +331,18 @@ fn non_maskable_interrupt(cpu: *CPU) {
   cpu.reg.pc.* = hi << 8 | lo;
 }
 
+let debug: bool = false;
 fn tick(cpu: *CPU) {
   let opcode = bus::read(cpu.reg.pc.*);
+
+  if debug {
+    fmt::print_str("TICK pc=");
+    fmt::print_u16(cpu.reg.pc.*);
+    fmt::print_str(" opcode=");
+    fmt::print_u8(opcode);
+    fmt::print_str(" ");
+  }
+
   cpu.last_opcode.* = opcode;
   cpu.last_pc.* = cpu.reg.pc.*;
   cpu.reg.pc.* = cpu.reg.pc.* + 1;
@@ -348,31 +358,40 @@ fn tick(cpu: *CPU) {
 
   if addr_mode == ADDR_MODE_IMP {
     data = cpu.reg.a.*;
+  } else if addr_mode == ADDR_MODE_A {
+    data = cpu.reg.a.*;
   } else if addr_mode == ADDR_MODE_IMM {
     addr = cpu.reg.pc.*;
+    cpu.reg.pc.* = cpu.reg.pc.* + 1;
     data = bus::read(addr);
-    cpu.reg.pc.* = cpu.reg.pc.* + 1;
   } else if addr_mode == ADDR_MODE_ZERO_PAGE {
-    addr = bus::read(cpu.reg.pc.*) as 16;
+    addr = bus::read(cpu.reg.pc.*) as u16;
     cpu.reg.pc.* = cpu.reg.pc.* + 1;
+    data = bus::read(addr);
   } else if addr_mode == ADDR_MODE_ZERO_PAGE_X {
     addr = (bus::read(cpu.reg.pc.*) + cpu.reg.x.*) as u16;
     cpu.reg.pc.* = cpu.reg.pc.* + 1;
+    data = bus::read(addr);
   } else if addr_mode == ADDR_MODE_ZERO_PAGE_Y {
     addr = (bus::read(cpu.reg.pc.*) + cpu.reg.y.*) as u16;
     cpu.reg.pc.* = cpu.reg.pc.* + 1;
+    data = bus::read(addr);
   } else if addr_mode == ADDR_MODE_REL {
     addr = ((bus::read(cpu.reg.pc.*) as i8) as i16 + cpu.reg.pc.* as i16 + 1) as u16;
     cpu.reg.pc.* = cpu.reg.pc.* + 1;
+    data = bus::read(addr);
   } else if addr_mode == ADDR_MODE_ABS {
     addr = mem_read_u16(cpu.reg.pc.*);
     cpu.reg.pc.* = cpu.reg.pc.* + 2;
+    data = bus::read(addr);
   } else if addr_mode == ADDR_MODE_ABS_X {
     addr = mem_read_u16(cpu.reg.pc.*) + cpu.reg.x.* as u16;
     cpu.reg.pc.* = cpu.reg.pc.* + 2;
+    data = bus::read(addr);
   } else if addr_mode == ADDR_MODE_ABS_Y {
     addr = mem_read_u16(cpu.reg.pc.*) + cpu.reg.y.* as u16;
     cpu.reg.pc.* = cpu.reg.pc.* + 2;
+    data = bus::read(addr);
   } else if addr_mode == ADDR_MODE_INDIRECT {
     wasm::trap();
   } else if addr_mode == ADDR_MODE_X_INDIRECT {
@@ -381,6 +400,7 @@ fn tick(cpu: *CPU) {
     let lo = bus::read(ptr as u16);
     let hi = bus::read((ptr + 1) as u16);
     addr = (hi as u16 << 8) | (lo as u16);
+    data = bus::read(addr);
   } else if addr_mode == ADDR_MODE_INDIRECT_Y {
     let ptr = bus::read(cpu.reg.pc.*);
     cpu.reg.pc.* = cpu.reg.pc.* + 1;
@@ -388,14 +408,44 @@ fn tick(cpu: *CPU) {
     let hi = bus::read((ptr + 1) as u16);
     let base = (hi as u16 << 8) | (lo as u16);
     addr = base + cpu.reg.y.* as u16;
+    data = bus::read(addr);
   }
-  data = bus::read(addr);
 
   cpu.last_data.* = data;
   cpu.last_addr.* = addr;
 
+  if debug {
+    fmt::print_str(ins.desc.*);
+    fmt::print_str(" addr=");
+    fmt::print_u16(addr);
+    fmt::print_str(" data=");
+    fmt::print_u8(data);
+    fmt::print_str("\n");
+  }
+
   let handler = ins.handler.*;
   handler(cpu, addr_mode, addr, data);
+
+  if debug {
+    fmt::print_str("A=");
+    fmt::print_u8(cpu.reg.a.*);
+    fmt::print_str(",X=");
+    fmt::print_u8(cpu.reg.x.*);
+    fmt::print_str(",Y=");
+    fmt::print_u8(cpu.reg.y.*);
+    fmt::print_str(",status=");
+    fmt::print_u8(cpu.reg.status.*);
+    fmt::print_str(" ");
+    if (cpu.reg.status.* & FLAG_MASK_CARRY) != 0 { fmt::print_str("C"); } else { fmt::print_str("-"); }
+    if (cpu.reg.status.* & FLAG_MASK_ZERO) != 0 { fmt::print_str("Z"); } else { fmt::print_str("-"); }
+    if (cpu.reg.status.* & FLAG_MASK_INTERRUPT_DISABLE) != 0 { fmt::print_str("I"); } else { fmt::print_str("-"); }
+    if (cpu.reg.status.* & FLAG_MASK_DECIMAL) != 0 { fmt::print_str("D"); } else { fmt::print_str("-"); }
+    if (cpu.reg.status.* & FLAG_MASK_BREAK) != 0 { fmt::print_str("B"); } else { fmt::print_str("-"); }
+    if (cpu.reg.status.* & FLAG_MASK_1) != 0 { fmt::print_str("1"); } else { fmt::print_str("-"); }
+    if (cpu.reg.status.* & FLAG_MASK_OVERFLOW) != 0 { fmt::print_str("V"); } else { fmt::print_str("-"); }
+    if (cpu.reg.status.* & FLAG_MASK_NEGATIVE) != 0 { fmt::print_str("N"); } else { fmt::print_str("-"); }
+    fmt::print_str("\n---------------------------------------------------------\n");
+  }
 }
 
 fn handle_instr_adc(cpu: *CPU, mode: u8, addr: u16, data: u8) {
@@ -403,6 +453,8 @@ fn handle_instr_adc(cpu: *CPU, mode: u8, addr: u16, data: u8) {
 }
 
 fn add_to_reg_a(cpu: *CPU, data: u8) {
+  data = data & 0xff;
+
   let tmp = cpu.reg.a.* as u16 + data as u16;
   if (cpu.reg.status.* & FLAG_MASK_CARRY) != 0 {
     tmp = tmp + 1;
@@ -410,16 +462,18 @@ fn add_to_reg_a(cpu: *CPU, data: u8) {
 
   if tmp > 0xff {
     cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_CARRY;
+  } else {
+    cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
   }
 
-  let result = tmp as u8;
-  if ((data ^ result) & (result & cpu.reg.a.*) & 0x80) != 0 {
+  let result = (tmp as u8) & 0xff;
+  if ((data ^ result) & (result ^ cpu.reg.a.*) & 0x80) != 0 {
     cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_OVERFLOW;
   } else {
     cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_OVERFLOW;
   }
 
-  cpu.reg.a.* = result;
+  set_reg_a(cpu, result);
 }
 
 fn handle_instr_and(cpu: *CPU, mode: u8, addr: u16, data: u8) {
@@ -489,13 +543,13 @@ fn handle_instr_bit(cpu: *CPU, mode: u8, addr: u16, data: u8) {
     cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_ZERO;
   }
 
-  if (data & 0b1000_0000) != 0 {
+  if (data & FLAG_MASK_NEGATIVE) != 0 {
     cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_NEGATIVE;
   } else {
     cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_NEGATIVE;
   }
 
-  if (data & 0b0100_0000) != 0 {
+  if (data & FLAG_MASK_OVERFLOW) != 0 {
     cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_OVERFLOW;
   } else {
     cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_OVERFLOW;
@@ -520,7 +574,9 @@ fn handle_instr_bpl(cpu: *CPU, mode: u8, addr: u16, data: u8) {
   }
 }
 
-fn handle_instr_brk(cpu: *CPU, mode: u8, addr: u16, data: u8) { wasm::trap(); }
+fn handle_instr_brk(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  wasm::trap();
+}
 
 fn handle_instr_bvc(cpu: *CPU, mode: u8, addr: u16, data: u8) {
   if (cpu.reg.status.* & FLAG_MASK_OVERFLOW) == 0 {
@@ -551,7 +607,7 @@ fn handle_instr_clv(cpu: *CPU, mode: u8, addr: u16, data: u8) {
 }
 
 fn handle_instr_cmp(cpu: *CPU, mode: u8, addr: u16, data: u8) {
-  let tmp = cpu.reg.a.* - data;
+  let tmp = (cpu.reg.a.* - data) & 0xff;
   update_zero_and_neg_flag(cpu, tmp);
   if data <= cpu.reg.a.* {
     cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_CARRY;
@@ -581,17 +637,30 @@ fn handle_instr_cpy(cpu: *CPU, mode: u8, addr: u16, data: u8) {
 }
 
 fn handle_instr_dec(cpu: *CPU, mode: u8, addr: u16, data: u8) {
-  let tmp = data - 1;
-  bus::write(addr, tmp);
-  update_zero_and_neg_flag(cpu, tmp);
+  if data == 0 {
+    data = 0xff;
+  } else {
+    data = data - 1;
+  }
+  bus::write(addr, data);
+  update_zero_and_neg_flag(cpu, data);
 }
 
 fn handle_instr_dex(cpu: *CPU, mode: u8, addr: u16, data: u8) {
-  cpu.reg.x.* = cpu.reg.x.* - 1;
+  if cpu.reg.x.* == 0 {
+    cpu.reg.x.* = 0xff;
+  } else {
+    cpu.reg.x.* = cpu.reg.x.* - 1;
+  }
   update_zero_and_neg_flag(cpu, cpu.reg.x.*);
 }
 
 fn handle_instr_dey(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  if cpu.reg.y.* == 0 {
+    cpu.reg.y.* = 0xff;
+  } else {
+    cpu.reg.y.* = cpu.reg.y.* - 1;
+  }
   cpu.reg.y.* = cpu.reg.y.* - 1;
   update_zero_and_neg_flag(cpu, cpu.reg.y.*);
 }
@@ -601,18 +670,30 @@ fn handle_instr_eor(cpu: *CPU, mode: u8, addr: u16, data: u8) {
 }
 
 fn handle_instr_inc(cpu: *CPU, mode: u8, addr: u16, data: u8) {
-  let tmp = data + 1;
-  bus::write(addr, tmp);
-  update_zero_and_neg_flag(cpu, tmp);
+  if data == 0xff {
+    data = 0;
+  } else {
+    data = data + 1;
+  }
+  bus::write(addr, data);
+  update_zero_and_neg_flag(cpu, data);
 }
 
 fn handle_instr_inx(cpu: *CPU, mode: u8, addr: u16, data: u8) {
-  cpu.reg.x.* = cpu.reg.x.* + 1;
+  if cpu.reg.x.* == 0xff {
+    cpu.reg.x.* = 0;
+  } else {
+    cpu.reg.x.* = cpu.reg.x.* + 1;
+  }
   update_zero_and_neg_flag(cpu, cpu.reg.x.*);
 }
 
 fn handle_instr_iny(cpu: *CPU, mode: u8, addr: u16, data: u8) {
-  cpu.reg.y.* = cpu.reg.y.* + 1;
+  if cpu.reg.y.* == 0xff {
+    cpu.reg.y.* = 0;
+  } else {
+    cpu.reg.y.* = cpu.reg.y.* + 1;
+  }
   update_zero_and_neg_flag(cpu, cpu.reg.y.*);
 }
 
@@ -658,7 +739,7 @@ fn handle_instr_lsr(cpu: *CPU, mode: u8, addr: u16, data: u8) {
     cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
   }
 
-  let data = data >> 1;
+  let data = (data & 0xff) >> 1;
   if mode == ADDR_MODE_A {
     cpu.reg.a.* = data;
   } else {
@@ -750,13 +831,7 @@ fn handle_instr_rts(cpu: *CPU, mode: u8, addr: u16, data: u8) {
 }
 
 fn handle_instr_sbc(cpu: *CPU, mode: u8, addr: u16, data: u8) { 
-  if (cpu.reg.status.* & FLAG_MASK_CARRY) != 0 {
-    let result = (-(data as i8) - 1) as u8;
-    set_reg_a(cpu, result);
-  } else {
-    let result = (-(data as i8)) as u8;
-    set_reg_a(cpu, result);
-  }
+  add_to_reg_a(cpu, (-(data as i8)-1) as u8);
 }
 
 fn handle_instr_sec(cpu: *CPU, mode: u8, addr: u16, data: u8) {
