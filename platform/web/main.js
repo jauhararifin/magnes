@@ -45,14 +45,13 @@ window.onload = async function() {
     },
   })
   const {
-    return_10,
     onKeyupArrowUp, onKeydownArrowUp,
     onKeyupArrowRight, onKeydownArrowRight,
     onKeyupArrowLeft, onKeydownArrowLeft,
     onKeyupArrowDown, onKeydownArrowDown,
     tick,
     memory,
-    getRom,
+    getRom, loadRom,
     getRam,
     reset,
     getFrameBuffer,
@@ -82,16 +81,21 @@ window.onload = async function() {
       onKeydownArrowDown();
   });
 
+  function getString(offset) {
+    const buff = new Uint8Array(memoryBuffer);
+    let length = 0;
+    while (buff[offset + length] !== 0) {
+      length++;
+    }
+    const stringBytes = new Uint8Array(memoryBuffer, offset, length);
+    const text = new TextDecoder().decode(stringBytes);
+    return text
+  }
+
   function getCPU() {
     const [a,x,y,sp,pc,status, lastOpcode, lastInsOffset, lastAddr, lastData, lastPc] = debugCPU()
 
-    const buff = new Uint8Array(memoryBuffer);
-    let length = 0;
-    while (buff[lastInsOffset + length] !== 0) {
-      length++;
-    }
-    const stringBytes = new Uint8Array(memoryBuffer, lastInsOffset, length);
-    const desc = new TextDecoder().decode(stringBytes);
+    const desc = getString(lastInsOffset)
 
     return {
       last: desc,
@@ -168,10 +172,15 @@ window.onload = async function() {
       const offset = getRom()
       const target = new Uint8Array(memoryBuffer)
       target.set(byteArray, offset)
-      reset();
-
-      playing = true;
-      lastExecuted = performance.now();
+      const [resultIsValid, resultError] = loadRom();
+      if (!resultIsValid) {
+        const message = getString(resultError);
+        alert(message);
+      } else {
+        reset();
+        playing = true;
+        lastExecuted = performance.now();
+      }
     }
     reader.readAsArrayBuffer(file);
   }

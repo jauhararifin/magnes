@@ -575,6 +575,7 @@ fn handle_instr_bpl(cpu: *CPU, mode: u8, addr: u16, data: u8) {
 }
 
 fn handle_instr_brk(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  // TODO: maybe should turn off the emulation?
   wasm::trap();
 }
 

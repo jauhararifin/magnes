@@ -1,15 +1,8 @@
 import mem "mem";
+import rom "rom";
 import bus "bus";
 import cpu "cpu";
 import fmt "fmt";
-
-let the_cpu: *cpu::CPU = init_cpu();
-
-fn init_cpu(): *cpu::CPU {
-  let c = mem::alloc::<cpu::CPU>();
-  c.* = cpu::new()
-  return c;
-}
 
 @wasm_export("onKeyupArrowUp")
 fn on_keyup_arrow_up() {}
@@ -45,12 +38,29 @@ fn on_keydown_arrow_down() {
 
 @wasm_export("tick")
 fn tick() {
-  cpu::tick(the_cpu);
+  cpu::tick(bus::the_cpu);
 }
 
+let rom_buffer: [*]u8 = mem::alloc_array::<u8>(0x10000);
 @wasm_export("getRom")
 fn get_rom(): [*]u8 {
-  return bus::ram[0x600] as [*]u8;
+  return rom_buffer;
+}
+
+struct LoadRomResult {
+  valid: bool,
+  error: [*]u8,
+}
+
+@wasm_export("loadRom")
+fn load_rom(): LoadRomResult {
+  let result = rom::load(rom_buffer);
+  if !result.valid {
+    return LoadRomResult{valid: false, error: result.error};
+  }
+
+  bus::the_rom.* = result;
+  return LoadRomResult{valid: true, error: 0 as [*]u8};
 }
 
 @wasm_export("getRam")
@@ -65,18 +75,14 @@ fn get_frame_buffer(): [*]u8 {
 
 @wasm_export("reset")
 fn reset() {
-  bus::write(0xfffc, 0x00);
-  bus::write(0xfffd, 0x06);
+  // bus::write(0xfffc, 0x00);
+  // bus::write(0xfffd, 0x06);
   bus::write(0x00fe, 0x2a);
-  cpu::reset(the_cpu);
+  cpu::reset(bus::the_cpu);
 }
 
 @wasm_export("debugCPU")
 fn debug_cpu(): cpu::CPU {
-  return the_cpu.*;
+  return bus::the_cpu.*;
 }
 
-@wasm_export("return_10")
-fn return_10(): i32 {
-  return 10;
-}
