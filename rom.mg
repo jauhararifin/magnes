@@ -7,6 +7,8 @@ let MIRRORING_FOUR_SCREEN: u8 = 2;
 let PRG_ROM_PAGE_SIZE: u16 = 0x4000;
 let CHR_ROM_PAGE_SIZE: u16 = 0x2000;
 
+let debug: bool = false;
+
 struct ROM {
   valid:           bool,
   error:           [*]u8,
@@ -53,17 +55,22 @@ fn load(raw_bytes: [*]u8): ROM {
   let prg_rom_size = (raw_bytes[4].* as u16) * PRG_ROM_PAGE_SIZE;
   let chr_rom_size = (raw_bytes[5].* as u16) * CHR_ROM_PAGE_SIZE;
 
-  fmt::print_str("program rom size = ");
-  fmt::print_u16(prg_rom_size);
-  fmt::print_str(", character rom size = ");
-  fmt::print_u16(chr_rom_size);
-  fmt::print_str("\n");
+  if debug {
+    fmt::print_str("program rom size = ");
+    fmt::print_u16(prg_rom_size);
+    fmt::print_str(", character rom size = ");
+    fmt::print_u16(chr_rom_size);
+    fmt::print_str("\n");
+  }
 
   let skip_trainer = (raw_bytes[6].* & 0b100) != 0;
-  if skip_trainer {
-    fmt::print_str("skip_trainer = true\n");
-  } else {
-    fmt::print_str("skip_trainer = false\n");
+
+  if debug {
+    if skip_trainer {
+      fmt::print_str("skip_trainer = true\n");
+    } else {
+      fmt::print_str("skip_trainer = false\n");
+    }
   }
 
   let prg_start: u16 = 16;

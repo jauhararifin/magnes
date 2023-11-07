@@ -77,7 +77,7 @@ fn get_frame_buffer(): [*]u8 {
 fn reset() {
   // bus::write(0xfffc, 0x00);
   // bus::write(0xfffd, 0x06);
-  bus::write(0x00fe, 0x2a);
+  // bus::write(0x00fe, 0x2a);
   cpu::reset(bus::the_cpu);
 }
 

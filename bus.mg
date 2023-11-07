@@ -34,10 +34,10 @@ fn read(addr: u16): u8 {
 
   if (addr >= 0) && (addr < 0x2000) {
     if debug {
-      fmt::print_u8(ram[addr & 0x0fff].*);
+      fmt::print_u8(ram[addr & 0x07ff].*);
       fmt::print_str("\n");
     }
-    return ram[addr & 0x0fff].*;
+    return ram[addr & 0x07ff].*;
   } else if (addr >= 0x2000) && (addr < 0x4000) {
     if debug {
       fmt::print_u8(ppu_register[addr & 0x07].*);
@@ -75,8 +75,8 @@ fn write(addr: u16, data: u8) {
     fmt::print_str("\n");
   }
 
-  if (addr > 0) && (addr < 0x2000) {
-    ram[addr & 0x0fff].* = data;
+  if (addr >= 0) && (addr < 0x2000) {
+    ram[addr & 0x07ff].* = data;
   } else if (addr >= 0x2000) && (addr < 0x4000) {
     ppu_register[addr & 0x07].* = data;
   } else {

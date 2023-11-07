@@ -27,19 +27,23 @@ fn test1() {
   cpu::reset(c);
   cpu::tick(c);
   if c.reg.a.* != 0xc0 {
+    fmt::print_str("1. register a is not 0xc0\n");
     wasm::trap();
   }
 
   cpu::tick(c);
   if c.reg.x.* != 0xc0 {
+    fmt::print_str("2. register x is not 0xc0\n");
     wasm::trap();
   }
 
   cpu::tick(c);
   if c.reg.a.* != 0xc0 {
+    fmt::print_str("3. register a is not 0xc0\n");
     wasm::trap();
   }
   if c.reg.x.* != 0xc1 {
+    fmt::print_str("4. register x is not 0xc1\n");
     wasm::trap();
   }
 }
