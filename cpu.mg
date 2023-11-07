@@ -49,7 +49,7 @@ let ADDR_MODE_ZERO_PAGE: u8 = 10;
 let ADDR_MODE_ZERO_PAGE_X: u8 = 11;
 let ADDR_MODE_ZERO_PAGE_Y: u8 = 12;
 
-let OPCODE_ADC: u8 =  0; // OPCODE_ADC add with carry
+let OPCODE_ADC: u8 =  0; // add with carry
 let OPCODE_AND: u8 =  1; // and (with accumulator)
 let OPCODE_ASL: u8 =  2; // arithmetic shift left
 let OPCODE_BCC: u8 =  3; // branch on carry clear
@@ -105,6 +105,15 @@ let OPCODE_TSX: u8 = 52; // transfer stack pointer to X
 let OPCODE_TXA: u8 = 53; // transfer X to accumulator
 let OPCODE_TXS: u8 = 54; // transfer X to stack pointer
 let OPCODE_TYA: u8 = 55; // transfer Y to accumulator
+let OPCODE_LAX: u8 = 56; // LDA + LDX
+let OPCODE_SAX: u8 = 57; // a and x -> m
+let OPCODE_USBC: u8 = 58;
+let OPCODE_DCP: u8 = 59;
+let OPCODE_ISB: u8 = 60;
+let OPCODE_SLO: u8 = 61;
+let OPCODE_RLA: u8 = 62;
+let OPCODE_SRE: u8 = 63;
+let OPCODE_RRA: u8 = 64;
 
 struct Instruction {
   code:      u8,
@@ -119,7 +128,7 @@ struct Instruction {
 let instruction_map: [*]Instruction = init_instruction_map();
 
 fn init_instruction_map(): [*]Instruction {
-  let map = mem::alloc_array::<Instruction>(0xFF);
+  let map = mem::alloc_array::<Instruction>(0x100);
 
   map[0x00].* = Instruction{code: 0x00, opcode: OPCODE_BRK, handler: handle_instr_brk, addr_mode: ADDR_MODE_IMP, desc: "BRK:IMP", name: "BRK"};
   map[0x01].* = Instruction{code: 0x01, opcode: OPCODE_ORA, handler: handle_instr_ora, addr_mode: ADDR_MODE_X_INDIRECT, desc: "ORA:X_INDIRECT", name: "ORA"};
@@ -299,6 +308,68 @@ fn init_instruction_map(): [*]Instruction {
   map[0xFC].* = Instruction{code: 0xFC, opcode: OPCODE_NOP, handler: handle_instr_nop, addr_mode: ADDR_MODE_ABS_X, desc: "NOP:ABS_X", name: "NOP", illegal: true};
   map[0xFD].* = Instruction{code: 0xFD, opcode: OPCODE_SBC, handler: handle_instr_sbc, addr_mode: ADDR_MODE_ABS_X, desc: "SBC:ABS_X", name: "SBC"};
   map[0xFE].* = Instruction{code: 0xFE, opcode: OPCODE_INC, handler: handle_instr_inc, addr_mode: ADDR_MODE_ABS_X, desc: "INC:ABS_X", name: "INC"};
+
+  map[0xA7].* = Instruction{code: 0xA7, opcode: OPCODE_LAX, handler: handle_instr_lax, addr_mode: ADDR_MODE_ZERO_PAGE, desc: "LAX:ZERO_PAGE", name: "LAX", illegal: true};
+  map[0xB7].* = Instruction{code: 0xB7, opcode: OPCODE_LAX, handler: handle_instr_lax, addr_mode: ADDR_MODE_ZERO_PAGE_Y, desc: "LAX:ZERO_PAGE_Y", name: "LAX", illegal: true};
+  map[0xAF].* = Instruction{code: 0xAF, opcode: OPCODE_LAX, handler: handle_instr_lax, addr_mode: ADDR_MODE_ABS, desc: "LAX:ABS", name: "LAX", illegal: true};
+  map[0xBF].* = Instruction{code: 0xBF, opcode: OPCODE_LAX, handler: handle_instr_lax, addr_mode: ADDR_MODE_ABS_Y, desc: "LAX:ABS_Y", name: "LAX", illegal: true};
+  map[0xA3].* = Instruction{code: 0xA3, opcode: OPCODE_LAX, handler: handle_instr_lax, addr_mode: ADDR_MODE_X_INDIRECT, desc: "LAX:X_INDIRECT", name: "LAX", illegal: true};
+  map[0xB3].* = Instruction{code: 0xB3, opcode: OPCODE_LAX, handler: handle_instr_lax, addr_mode: ADDR_MODE_INDIRECT_Y, desc: "LAX:INDIRECT_Y", name: "LAX", illegal: true};
+
+  map[0x87].* = Instruction{code: 0x87, opcode: OPCODE_SAX, handler: handle_instr_sax, addr_mode: ADDR_MODE_ZERO_PAGE, desc: "SAX:ZERO_PAGE", name: "SAX", illegal: true};
+  map[0x97].* = Instruction{code: 0x97, opcode: OPCODE_SAX, handler: handle_instr_sax, addr_mode: ADDR_MODE_ZERO_PAGE_Y, desc: "SAX:ZERO_PAGE_Y", name: "SAX", illegal: true};
+  map[0x8F].* = Instruction{code: 0x8F, opcode: OPCODE_SAX, handler: handle_instr_sax, addr_mode: ADDR_MODE_ABS, desc: "SAX:ABS", name: "SAX", illegal: true};
+  map[0x83].* = Instruction{code: 0x83, opcode: OPCODE_SAX, handler: handle_instr_sax, addr_mode: ADDR_MODE_X_INDIRECT, desc: "SAX:X_INDIRECT", name: "SAX", illegal: true};
+
+  map[0xEB].* = Instruction{code: 0xEB, opcode: OPCODE_USBC, handler: handle_instr_usbc, addr_mode: ADDR_MODE_IMM, desc: "INC:IMM", name: "SBC", illegal: true};
+
+  map[0xC7].* = Instruction{code: 0xC7, opcode: OPCODE_DCP, handler: handle_instr_dcp, addr_mode: ADDR_MODE_ZERO_PAGE, desc: "DCP:ZERO_PAGE", name: "DCP", illegal: true};
+  map[0xD7].* = Instruction{code: 0xD7, opcode: OPCODE_DCP, handler: handle_instr_dcp, addr_mode: ADDR_MODE_ZERO_PAGE_X, desc: "DCP:ZERO_PAGE_X", name: "DCP", illegal: true};
+  map[0xCF].* = Instruction{code: 0xCF, opcode: OPCODE_DCP, handler: handle_instr_dcp, addr_mode: ADDR_MODE_ABS, desc: "DCP:ABS", name: "DCP", illegal: true};
+  map[0xDF].* = Instruction{code: 0xDF, opcode: OPCODE_DCP, handler: handle_instr_dcp, addr_mode: ADDR_MODE_ABS_X, desc: "DCP:ABS_X", name: "DCP", illegal: true};
+  map[0xDB].* = Instruction{code: 0xDB, opcode: OPCODE_DCP, handler: handle_instr_dcp, addr_mode: ADDR_MODE_ABS_Y, desc: "DCP:ABS_Y", name: "DCP", illegal: true};
+  map[0xC3].* = Instruction{code: 0xC3, opcode: OPCODE_DCP, handler: handle_instr_dcp, addr_mode: ADDR_MODE_X_INDIRECT, desc: "DCP:X_INDIRECT", name: "DCP", illegal: true};
+  map[0xD3].* = Instruction{code: 0xD3, opcode: OPCODE_DCP, handler: handle_instr_dcp, addr_mode: ADDR_MODE_INDIRECT_Y, desc: "DCP:INDIRECT_Y", name: "DCP", illegal: true};
+
+  map[0xE7].* = Instruction{code: 0xE7, opcode: OPCODE_ISB, handler: handle_instr_isb, addr_mode: ADDR_MODE_ZERO_PAGE, desc: "ISB:ZERO_PAGE", name: "ISB", illegal: true};
+  map[0xF7].* = Instruction{code: 0xF7, opcode: OPCODE_ISB, handler: handle_instr_isb, addr_mode: ADDR_MODE_ZERO_PAGE_X, desc: "ISB:ZERO_PAGE_X", name: "ISB", illegal: true};
+  map[0xEF].* = Instruction{code: 0xEF, opcode: OPCODE_ISB, handler: handle_instr_isb, addr_mode: ADDR_MODE_ABS, desc: "ISB:ABS", name: "ISB", illegal: true};
+  map[0xFF].* = Instruction{code: 0xFF, opcode: OPCODE_ISB, handler: handle_instr_isb, addr_mode: ADDR_MODE_ABS_X, desc: "ISB:ABS_X", name: "ISB", illegal: true};
+  map[0xFB].* = Instruction{code: 0xFB, opcode: OPCODE_ISB, handler: handle_instr_isb, addr_mode: ADDR_MODE_ABS_Y, desc: "ISB:ABS_Y", name: "ISB", illegal: true};
+  map[0xE3].* = Instruction{code: 0xE3, opcode: OPCODE_ISB, handler: handle_instr_isb, addr_mode: ADDR_MODE_X_INDIRECT, desc: "ISB:X_INDIRECT", name: "ISB", illegal: true};
+  map[0xF3].* = Instruction{code: 0xF3, opcode: OPCODE_ISB, handler: handle_instr_isb, addr_mode: ADDR_MODE_INDIRECT_Y, desc: "ISB:INDIRECT_Y", name: "ISB", illegal: true};
+
+  map[0x07].* = Instruction{code: 0x07, opcode: OPCODE_SLO, handler: handle_instr_slo, addr_mode: ADDR_MODE_ZERO_PAGE, desc: "SLO:ZERO_PAGE", name: "SLO", illegal: true};
+  map[0x17].* = Instruction{code: 0x17, opcode: OPCODE_SLO, handler: handle_instr_slo, addr_mode: ADDR_MODE_ZERO_PAGE_X, desc: "SLO:ZERO_PAGE_X", name: "SLO", illegal: true};
+  map[0x0F].* = Instruction{code: 0x0F, opcode: OPCODE_SLO, handler: handle_instr_slo, addr_mode: ADDR_MODE_ABS, desc: "SLO:ABS", name: "SLO", illegal: true};
+  map[0x1F].* = Instruction{code: 0x1F, opcode: OPCODE_SLO, handler: handle_instr_slo, addr_mode: ADDR_MODE_ABS_X, desc: "SLO:ABS_X", name: "SLO", illegal: true};
+  map[0x1B].* = Instruction{code: 0x1B, opcode: OPCODE_SLO, handler: handle_instr_slo, addr_mode: ADDR_MODE_ABS_Y, desc: "SLO:ABS_Y", name: "SLO", illegal: true};
+  map[0x03].* = Instruction{code: 0x03, opcode: OPCODE_SLO, handler: handle_instr_slo, addr_mode: ADDR_MODE_X_INDIRECT, desc: "SLO:X_INDIRECT", name: "SLO", illegal: true};
+  map[0x13].* = Instruction{code: 0x13, opcode: OPCODE_SLO, handler: handle_instr_slo, addr_mode: ADDR_MODE_INDIRECT_Y, desc: "SLO:INDIRECT_Y", name: "SLO", illegal: true};
+
+  map[0x27].* = Instruction{code: 0x27, opcode: OPCODE_RLA, handler: handle_instr_rla, addr_mode: ADDR_MODE_ZERO_PAGE, desc: "RLA:ZERO_PAGE", name: "RLA", illegal: true};
+  map[0x37].* = Instruction{code: 0x37, opcode: OPCODE_RLA, handler: handle_instr_rla, addr_mode: ADDR_MODE_ZERO_PAGE_X, desc: "RLA:ZERO_PAGE_X", name: "RLA", illegal: true};
+  map[0x2F].* = Instruction{code: 0x2F, opcode: OPCODE_RLA, handler: handle_instr_rla, addr_mode: ADDR_MODE_ABS, desc: "RLA:ABS", name: "RLA", illegal: true};
+  map[0x3F].* = Instruction{code: 0x3F, opcode: OPCODE_RLA, handler: handle_instr_rla, addr_mode: ADDR_MODE_ABS_X, desc: "RLA:ABS_X", name: "RLA", illegal: true};
+  map[0x3B].* = Instruction{code: 0x3B, opcode: OPCODE_RLA, handler: handle_instr_rla, addr_mode: ADDR_MODE_ABS_Y, desc: "RLA:ABS_Y", name: "RLA", illegal: true};
+  map[0x23].* = Instruction{code: 0x23, opcode: OPCODE_RLA, handler: handle_instr_rla, addr_mode: ADDR_MODE_X_INDIRECT, desc: "RLA:X_INDIRECT", name: "RLA", illegal: true};
+  map[0x33].* = Instruction{code: 0x33, opcode: OPCODE_RLA, handler: handle_instr_rla, addr_mode: ADDR_MODE_INDIRECT_Y, desc: "RLA:INDIRECT_Y", name: "RLA", illegal: true};
+
+  map[0x47].* = Instruction{code: 0x47, opcode: OPCODE_SRE, handler: handle_instr_sre, addr_mode: ADDR_MODE_ZERO_PAGE, desc: "SRE:ZERO_PAGE", name: "SRE", illegal: true};
+  map[0x57].* = Instruction{code: 0x57, opcode: OPCODE_SRE, handler: handle_instr_sre, addr_mode: ADDR_MODE_ZERO_PAGE_X, desc: "SRE:ZERO_PAGE_X", name: "SRE", illegal: true};
+  map[0x4F].* = Instruction{code: 0x4F, opcode: OPCODE_SRE, handler: handle_instr_sre, addr_mode: ADDR_MODE_ABS, desc: "SRE:ABS", name: "SRE", illegal: true};
+  map[0x5F].* = Instruction{code: 0x5F, opcode: OPCODE_SRE, handler: handle_instr_sre, addr_mode: ADDR_MODE_ABS_X, desc: "SRE:ABS_X", name: "SRE", illegal: true};
+  map[0x5B].* = Instruction{code: 0x5B, opcode: OPCODE_SRE, handler: handle_instr_sre, addr_mode: ADDR_MODE_ABS_Y, desc: "SRE:ABS_Y", name: "SRE", illegal: true};
+  map[0x43].* = Instruction{code: 0x43, opcode: OPCODE_SRE, handler: handle_instr_sre, addr_mode: ADDR_MODE_X_INDIRECT, desc: "SRE:X_INDIRECT", name: "SRE", illegal: true};
+  map[0x53].* = Instruction{code: 0x53, opcode: OPCODE_SRE, handler: handle_instr_sre, addr_mode: ADDR_MODE_INDIRECT_Y, desc: "SRE:INDIRECT_Y", name: "SRE", illegal: true};
+
+  map[0x67].* = Instruction{code: 0x47, opcode: OPCODE_RRA, handler: handle_instr_rra, addr_mode: ADDR_MODE_ZERO_PAGE, desc: "RRA:ZERO_PAGE", name: "RRA", illegal: true};
+  map[0x77].* = Instruction{code: 0x77, opcode: OPCODE_RRA, handler: handle_instr_rra, addr_mode: ADDR_MODE_ZERO_PAGE_X, desc: "RRA:ZERO_PAGE_X", name: "RRA", illegal: true};
+  map[0x6F].* = Instruction{code: 0x4F, opcode: OPCODE_RRA, handler: handle_instr_rra, addr_mode: ADDR_MODE_ABS, desc: "RRA:ABS", name: "RRA", illegal: true};
+  map[0x7F].* = Instruction{code: 0x7F, opcode: OPCODE_RRA, handler: handle_instr_rra, addr_mode: ADDR_MODE_ABS_X, desc: "RRA:ABS_X", name: "RRA", illegal: true};
+  map[0x7B].* = Instruction{code: 0x7B, opcode: OPCODE_RRA, handler: handle_instr_rra, addr_mode: ADDR_MODE_ABS_Y, desc: "RRA:ABS_Y", name: "RRA", illegal: true};
+  map[0x63].* = Instruction{code: 0x43, opcode: OPCODE_RRA, handler: handle_instr_rra, addr_mode: ADDR_MODE_X_INDIRECT, desc: "RRA:X_INDIRECT", name: "RRA", illegal: true};
+  map[0x73].* = Instruction{code: 0x73, opcode: OPCODE_RRA, handler: handle_instr_rra, addr_mode: ADDR_MODE_INDIRECT_Y, desc: "RRA:INDIRECT_Y", name: "RRA", illegal: true};
 
   return map;
 }
@@ -1002,6 +1073,127 @@ fn handle_instr_txs(cpu: *CPU, mode: u8, addr: u16, data: u8) {
 fn handle_instr_tya(cpu: *CPU, mode: u8, addr: u16, data: u8) {
   cpu.reg.a.* = cpu.reg.y.*;
   update_zero_and_neg_flag(cpu, cpu.reg.a.*);
+}
+
+fn handle_instr_lax(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  set_reg_a(cpu, data);
+  cpu.reg.x.* = cpu.reg.a.*;
+}
+
+fn handle_instr_sax(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  bus::write(addr, cpu.reg.a.* & cpu.reg.x.*);
+}
+
+fn handle_instr_usbc(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  add_to_reg_a(cpu, (-(data as i8)-1) as u8);
+}
+
+fn handle_instr_dcp(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  let data = data - 1;
+  bus::write(addr, data);
+  if data <= cpu.reg.a.* {
+    cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_CARRY;
+  }
+  update_zero_and_neg_flag(cpu, cpu.reg.a.* - data);
+}
+
+fn handle_instr_isb(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  if data == 0xff {
+    data = 0;
+  } else {
+    data = data + 1;
+  }
+  bus::write(addr, data);
+  update_zero_and_neg_flag(cpu, data);
+
+  add_to_reg_a(cpu, (-(data as i8)-1) as u8);
+}
+
+fn handle_instr_slo(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  if (data & 0b1000_0000) != 0 {
+    cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_CARRY;
+  } else {
+    cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
+  }
+
+  let tmp = data << 1;
+
+  if mode == ADDR_MODE_A {
+    cpu.reg.a.* = tmp as u8;
+  } else {
+    bus::write(addr, tmp as u8);
+  }
+
+  update_zero_and_neg_flag(cpu, tmp);
+
+  set_reg_a(cpu, tmp | cpu.reg.a.*);
+}
+
+fn handle_instr_rla(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  let old_carry = (cpu.reg.status.* & FLAG_MASK_CARRY) != 0;
+
+  if (data & 0b1000_0000) != 0 {
+    cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_CARRY;
+  } else {
+    cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
+  }
+  data = data << 1;
+
+  if old_carry {
+    data = data | 1;
+  }
+
+  if mode == ADDR_MODE_A {
+    set_reg_a(cpu, data);
+  } else {
+    bus::write(addr, data);
+    update_zero_and_neg_flag(cpu, data);
+  }
+
+  set_reg_a(cpu, data & cpu.reg.a.*);
+}
+
+fn handle_instr_sre(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  if (data & 1) != 0 {
+    cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_CARRY;
+  } else {
+    cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
+  }
+
+  let data = (data & 0xff) >> 1;
+  if mode == ADDR_MODE_A {
+    cpu.reg.a.* = data;
+  } else {
+    bus::write(addr, data);
+  }
+
+  update_zero_and_neg_flag(cpu, data);
+
+  set_reg_a(cpu, data ^ cpu.reg.a.*);
+}
+
+fn handle_instr_rra(cpu: *CPU, mode: u8, addr: u16, data: u8) {
+  let old_carry = (cpu.reg.status.* & FLAG_MASK_CARRY) != 0;
+
+  if (data & 1) != 0 {
+    cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_CARRY;
+  } else {
+    cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
+  }
+  data = data >> 1;
+
+  if old_carry {
+    data = data | 0b1000_0000;
+  }
+
+  if mode == ADDR_MODE_A {
+    set_reg_a(cpu, data);
+  } else {
+    bus::write(addr, data);
+    update_zero_and_neg_flag(cpu, data);
+  }
+
+  add_to_reg_a(cpu, data);
 }
 
 let s: [*]u8 = mem::alloc_array::<u8>(5);
