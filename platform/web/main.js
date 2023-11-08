@@ -1,7 +1,4 @@
 window.onload = async function() {
-  canvas.width = 32
-  canvas.height = 32
-
   const ctx = canvas.getContext('2d')
   ctx.webkitImageSmoothingEnabled = false;
   ctx.mozImageSmoothingEnabled = false;
@@ -175,7 +172,7 @@ window.onload = async function() {
     reader.onload = function(e) {
       const arrayBuffer = e.target.result;
       const byteArray = new Uint8Array(arrayBuffer);
-      if (byteArray.length > 40*1024) {
+      if (byteArray.length > 65536) {
         alert("ROM is too big")
         return
       }

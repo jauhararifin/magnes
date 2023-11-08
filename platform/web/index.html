@@ -23,12 +23,12 @@
           margin: 0;
           padding: 0;
           border: 0;
-          width: 400px;
-          height: 400px;
+          width: 512px;
+          height: 480px;
         }
         #charTileCanvas {
-          width: 800px;
-          height: 400px;
+          width: 512px;
+          height: 256px;
         }
       </style>
   </head>
@@ -38,7 +38,8 @@
         <input type="file" id="romInput" name="myFile">
         <button id="playButton">Play</button>
       </div>
-      <canvas id="canvas" class="pixelate"></canvas>
+      <!-- <canvas id="canvas" class="pixelate" width=256 height=240></canvas> -->
+      <canvas id="canvas" class="pixelate" width=32 height=32></canvas>
       <h5>Character Tiles</h5>
       <canvas id="charTileCanvas" class="pixelate" width=256 height=128></canvas>
     </div>

@@ -37,9 +37,8 @@ let CONTROL_FLAG_NMI: u8                     = 1<<7;
 struct PPU {
   characters:      [*]u8,
   characters_size: u16,
-  palette:         [*]u8, // 32 bytes
+  palette:         [*]u8,
   vram:            [*]u8, // 2KB
-  oam_data:        [*]u8, // 256 bytes
   mirroring:       u8,
 
   reg: Register,
@@ -66,6 +65,8 @@ fn new(): *PPU {
   // tile framebuffer stores 2 banks of 256 tile of 8x8 pixels of RGBa channel
   // so the size is 2*256*8*8*4 = 0x20000
   p.debug.tile_framebuffer.* = mem::alloc_array::<u8>(0x20000);
+  p.vram.* = mem::alloc_array::<u8>(0x800);
+  p.palette.* = mem::alloc_array::<u8>(0x20);
 
   reset(p);
   return p;
