@@ -7,6 +7,11 @@ window.onload = async function() {
   ctx.mozImageSmoothingEnabled = false;
   ctx.imageSmoothingEnabled = false;
 
+  const charDebugCtx = charTileCanvas.getContext('2d')
+  charDebugCtx.webkitImageSmoothingEnabled = false;
+  charDebugCtx.mozImageSmoothingEnabled = false;
+  charDebugCtx.imageSmoothingEnabled = false;
+
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data
 
@@ -39,7 +44,6 @@ window.onload = async function() {
             console.log(debuggingBuffer.substr(0, x))
             debuggingBuffer = debuggingBuffer.substr(x + 1)
           }
-          // debugText.value += text
         }
       }
     },
@@ -56,6 +60,7 @@ window.onload = async function() {
     reset,
     getFrameBuffer,
     debugCPU,
+    getDebugTileFramebufer,
   } = module.instance.exports;
   memoryBuffer = memory.buffer
 
@@ -148,6 +153,11 @@ window.onload = async function() {
         data[i*4+2] = color[2]
       }
       ctx.putImageData(imageData, 0, 0)
+
+      const charTileDebugFramebuffer = getDebugTileFramebufer()
+      const pixels = new Uint8ClampedArray(memoryBuffer, charTileDebugFramebuffer, 32*16*8*8*4);
+      const charDebugImageData = new ImageData(pixels, 32*8, 16*8);
+      charDebugCtx.putImageData(charDebugImageData, 0, 0)
     }
 
     requestAnimationFrame(frame)
@@ -169,15 +179,19 @@ window.onload = async function() {
         alert("ROM is too big")
         return
       }
+
       const offset = getRom()
       const target = new Uint8Array(memoryBuffer)
       target.set(byteArray, offset)
+
       const [resultIsValid, resultError] = loadRom();
       if (!resultIsValid) {
         const message = getString(resultError);
         alert(message);
       } else {
+        console.log('resetting')
         reset();
+        console.log("getDebugTileFramebufer", getDebugTileFramebufer())
         playing = true;
         lastExecuted = performance.now();
       }

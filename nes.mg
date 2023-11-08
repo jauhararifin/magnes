@@ -2,6 +2,7 @@ import mem "mem";
 import rom "rom";
 import bus "bus";
 import cpu "cpu";
+import ppu "ppu";
 import fmt "fmt";
 
 @wasm_export("onKeyupArrowUp")
@@ -60,6 +61,9 @@ fn load_rom(): LoadRomResult {
   }
 
   bus::the_rom.* = result;
+
+  ppu::load_rom(bus::the_ppu, bus::the_rom);
+
   return LoadRomResult{valid: true, error: 0 as [*]u8};
 }
 
@@ -79,10 +83,16 @@ fn reset() {
   // bus::write(0xfffd, 0x06);
   // bus::write(0x00fe, 0x2a);
   cpu::reset(bus::the_cpu);
+  ppu::reset(bus::the_ppu);
 }
 
 @wasm_export("debugCPU")
 fn debug_cpu(): cpu::CPU {
   return bus::the_cpu.*;
+}
+
+@wasm_export("getDebugTileFramebufer")
+fn get_debug_tile_framebuffer(): [*]u8 {
+  return bus::the_ppu.debug.tile_framebuffer.*;
 }
 

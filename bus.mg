@@ -3,8 +3,10 @@ import fmt "fmt";
 import wasm "wasm";
 import cpu "cpu";
 import rom "rom";
+import ppu "ppu";
 
 let the_cpu: *cpu::CPU = init_cpu();
+let the_ppu: *ppu::PPU = ppu::new();
 let the_rom: *rom::ROM = mem::alloc::<rom::ROM>();
 let ram: [*]u8 = mem::alloc_array::<u8>(0x2000);
 let ppu_register: [*]u8 = mem::alloc_array::<u8>(8);
@@ -43,7 +45,7 @@ fn read(addr: u16): u8 {
       fmt::print_u8(ppu_register[addr & 0x07].*);
       fmt::print_str("\n");
     }
-    return ppu_register[addr & 0x07].*;
+    ppu::get_register(the_ppu, (addr & 0x07) as u8);
   } else if addr >= 0x8000 {
     let addr = addr - 0x8000;
     if (the_rom.program_size.* == 0x4000) && (addr >= 0x4000) {
@@ -78,7 +80,7 @@ fn write(addr: u16, data: u8) {
   if (addr >= 0) && (addr < 0x2000) {
     ram[addr & 0x07ff].* = data;
   } else if (addr >= 0x2000) && (addr < 0x4000) {
-    ppu_register[addr & 0x07].* = data;
+    ppu::set_register(the_ppu, (addr as u8) & 0x07, data);
   } else {
     if debug {
       fmt::print_str("invalid write ");

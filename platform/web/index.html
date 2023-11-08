@@ -8,12 +8,7 @@
       <META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE">
       <META HTTP-EQUIV="EXPIRES" CONTENT="Mon, 22 Jul 2002 11:12:01 GMT">
       <style>
-        #canvas {
-          margin: 0;
-          padding: 0;
-          border: 0;
-          width: 400px;
-          height: 400px;
+        .pixelate {
           image-rendering: auto;
           image-rendering: crisp-edges;
           image-rendering: pixelated;
@@ -24,8 +19,16 @@
           image-rendering: crisp-edges;
           -ms-interpolation-mode: nearest-neighbor;
         }
-        #debugText {
-          display: block;
+        #canvas {
+          margin: 0;
+          padding: 0;
+          border: 0;
+          width: 400px;
+          height: 400px;
+        }
+        #charTileCanvas {
+          width: 800px;
+          height: 400px;
         }
       </style>
   </head>
@@ -35,8 +38,9 @@
         <input type="file" id="romInput" name="myFile">
         <button id="playButton">Play</button>
       </div>
-      <canvas id="canvas"></canvas>
-      <textarea id="debugText" rows=30 cols=120 disabled=1></textarea>
+      <canvas id="canvas" class="pixelate"></canvas>
+      <h5>Character Tiles</h5>
+      <canvas id="charTileCanvas" class="pixelate" width=256 height=128></canvas>
     </div>
     <script src="/main.js"></script>
   </body>

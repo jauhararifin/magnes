@@ -7,7 +7,7 @@ let MIRRORING_FOUR_SCREEN: u8 = 2;
 let PRG_ROM_PAGE_SIZE: u16 = 0x4000;
 let CHR_ROM_PAGE_SIZE: u16 = 0x2000;
 
-let debug: bool = false;
+let debug: bool = true;
 
 struct ROM {
   valid:           bool,
