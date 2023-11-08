@@ -115,15 +115,13 @@ window.onload = async function() {
   }
 
   let playing = false
-  let lastExecuted = performance.now();
-  const interval = 0.07;
+  let lastExecuted = Math.round(performance.now() * 1_000_000)
   function frame() {
     if (playing) {
-      const currentTime = performance.now();
-      while ((lastExecuted + interval) <= currentTime) {
-        tick()
-        lastExecuted += interval
-      }
+      const currentTime = Math.round(performance.now() * 1_000_000)
+      const elapsed = Math.min(currentTime - lastExecuted, 10_000_000)
+      tick(BigInt(Math.round(elapsed)))
+      lastExecuted = currentTime
 
       const framebuffer = getFrameBuffer()
       const buff = new Uint8Array(memoryBuffer);

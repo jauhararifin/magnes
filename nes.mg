@@ -37,9 +37,18 @@ fn on_keydown_arrow_down() {
   bus::write(0x00ff, 0x73);
 }
 
+let remaining_elapsed_nanosecond: i64 = 0;
+let cycle_rate: i64 = 40000; // cycles per second
+let cycle_period: i64 = 1_000_000_000 / cycle_rate;
 @wasm_export("tick")
-fn tick() {
-  cpu::tick(bus::the_cpu);
+fn tick(elapsed: i64) {
+  remaining_elapsed_nanosecond = remaining_elapsed_nanosecond + elapsed;
+  let cpu_cycle = remaining_elapsed_nanosecond / cycle_period;
+  cpu::tick(bus::the_cpu, cpu_cycle);
+  remaining_elapsed_nanosecond = remaining_elapsed_nanosecond % cycle_period;
+
+  let ppu_cycle = cpu_cycle * 3;
+  ppu::tick(bus::the_ppu, ppu_cycle);
 }
 
 let rom_buffer: [*]u8 = mem::alloc_array::<u8>(0x10000);

@@ -2,6 +2,8 @@ import wasm "wasm";
 import mem "mem";
 import fmt "fmt";
 import rom "rom";
+import cpu "cpu";
+import bus "bus";
 
 // PPU memory map
 // [0x0000 - 0x2000): pattern table (the characters rom)
@@ -34,6 +36,10 @@ let CONTROL_FLAG_SPRITE_SIZE: u8             = 1<<5;
 let CONTROL_FLAG_MASTER_SLAVE_SELECT: u8     = 1<<6;
 let CONTROL_FLAG_NMI: u8                     = 1<<7;
 
+let STATUS_FLAG_SPRITE_OVERFLOW: u8 = 1<<5;
+let STATUS_FLAG_ZERO_HIT: u8        = 1<<6;
+let STATUS_FLAG_VBLANK_STARTED: u8  = 1<<7;
+
 struct PPU {
   characters:      [*]u8,
   characters_size: u16,
@@ -49,10 +55,14 @@ struct PPU {
   is_reading_hi: bool,
 
   debug: Debug,
+
+  cycles:   i32,
+  scanline: i32,
 }
 
 struct Register {
   control: u8,
+  status:  u8,
 }
 
 struct Debug {
@@ -81,17 +91,48 @@ fn load_rom(ppu: *PPU, cart: *rom::ROM) {
 
 fn reset(ppu: *PPU) {
   ppu.reg.control.*   = 0;
+  ppu.reg.status.*    = 0;
   ppu.addr_lo.*       = 0;
   ppu.addr_hi.*       = 0;
   ppu.data.*          = 0;
   ppu.is_reading_hi.* = false;
 }
 
+fn tick(ppu: *PPU, cycles: i64) {
+  ppu.cycles.* = ppu.cycles.* + cycles as i32;
+
+  while ppu.cycles.* >= 341 {
+    ppu.cycles.* = ppu.cycles.* - 341;
+    ppu.scanline.* = ppu.scanline.* + 1;
+    
+    if ppu.scanline.* == 241 {
+      ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_VBLANK_STARTED;
+      ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_ZERO_HIT;
+      if (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0 {
+        cpu::non_maskable_interrupt(bus::the_cpu);
+      }
+    }
+    if ppu.scanline.* >= 262 {
+      ppu.scanline.* = 0;
+      ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_ZERO_HIT;
+      ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_VBLANK_STARTED;
+    }
+  }
+}
+
 fn set_register(ppu: *PPU, id: u8, data: u8) {
   if id == 0 {
+    let old_nmi_status = (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0;
+    ppu.reg.control.* = data;
+    let new_nmi_status = (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0;
+    let status_vblank = (ppu.reg.status.* & STATUS_FLAG_VBLANK_STARTED) != 0;
+    if !old_nmi_status && new_nmi_status && status_vblank {
+      cpu::non_maskable_interrupt(bus::the_cpu);
+    }
   } else if id == 1 {
   } else if id == 2 {
-    fmt::print_str("register 0 is read only\n"); wasm::trap();
+    fmt::print_str("register 2 is read only\n");
+    wasm::trap();
   } else if id == 3 {
   } else if id == 4 {
   } else if id == 5 {
@@ -103,22 +144,24 @@ fn set_register(ppu: *PPU, id: u8, data: u8) {
     fmt::print_str("\n");
     wasm::trap();
   }
-  wasm::trap();
 }
 
 fn get_register(ppu: *PPU, id: u8): u8 {
   if id == 0 {
     fmt::print_str("register 0 is write only\n"); wasm::trap();
   } else if id == 1 {
-    fmt::print_str("register 0 is write only\n"); wasm::trap();
+    fmt::print_str("register 1 is write only\n"); wasm::trap();
   } else if id == 2 {
+    let reg = ppu.reg.status.*;
+    ppu.reg.status.* = reg & ~STATUS_FLAG_VBLANK_STARTED;
+    return reg;
   } else if id == 3 {
-    fmt::print_str("register 0 is write only\n"); wasm::trap();
+    fmt::print_str("register 3 is write only\n"); wasm::trap();
   } else if id == 4 {
   } else if id == 5 {
-    fmt::print_str("register 0 is write only\n"); wasm::trap();
+    fmt::print_str("register 5 is write only\n"); wasm::trap();
   } else if id == 6 {
-    fmt::print_str("register 0 is write only\n"); wasm::trap();
+    fmt::print_str("register 6 is write only\n"); wasm::trap();
   } else if id == 7 {
   } else {
     fmt::print_str("setting invalid register id ");

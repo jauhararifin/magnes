@@ -5,6 +5,7 @@ import mem "mem";
 
 struct CPU {
   reg: Register,
+  remaining_cycle: i32,
 
   last_opcode: u8,
   last_ins: [*]u8, // TODO: remove this, this is for debugging only
@@ -373,6 +374,7 @@ fn reset(cpu: *CPU) {
   cpu.reg.sp.* = 0xfd;
   cpu.reg.status.* = 0x00 | FLAG_MASK_INTERRUPT_DISABLE | FLAG_MASK_1;
   cpu.reg.pc.* = mem_read_u16(0xfffc);
+  cpu.remaining_cycle.* = 7;
 }
 
 fn mem_read_u16(addr: u16): u16 {
@@ -421,10 +423,26 @@ fn non_maskable_interrupt(cpu: *CPU) {
   let lo = bus::read(addr_0) as u16;
   let hi = bus::read(addr_0 + 1) as u16;
   cpu.reg.pc.* = hi << 8 | lo;
+  fmt::print_str("NMI executed pc=");
+  fmt::print_u16(cpu.reg.pc.*);
+  fmt::print_str("\n");
+}
+
+fn tick(cpu: *CPU, cycles: i64) {
+  let cycles = cycles as i32;
+  while cycles > 0 {
+    if cpu.remaining_cycle.* <= cycles {
+      cycles = cycles - cpu.remaining_cycle.*;
+      cpu.remaining_cycle.* = execute_next_instruction(cpu);
+    } else {
+      cpu.remaining_cycle.* = cpu.remaining_cycle.* - cycles;
+      cycles = 0;
+    }
+  }
 }
 
 let debug: bool = false;
-fn tick(cpu: *CPU) {
+fn execute_next_instruction(cpu: *CPU): i32 {
   let opcode = bus::read(cpu.reg.pc.*);
 
   if debug {
@@ -618,6 +636,7 @@ fn tick(cpu: *CPU) {
 
   let handler = ins.handler.*;
   let additional_cycle = handler(cpu, addr_mode, addr, data);
+  return ins.cycle.* + additional_cycle;
 }
 
 fn handle_instr_adc(cpu: *CPU, mode: u8, addr: u16, data: u8): i32 {

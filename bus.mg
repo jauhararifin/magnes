@@ -47,11 +47,14 @@ fn read(addr: u16): u8 {
     }
     let data = ppu::get_register(the_ppu, (addr & 0x07) as u8);
 
-    fmt::print_str("read ppu register i=");
+    fmt::print_str(".read ppu register i=");
     fmt::print_u16(addr);
     fmt::print_str(",result=");
     fmt::print_u8(data);
-    fmt::print_str("\n");
+    fmt::print_str(",pc=");
+    fmt::print_u16(the_cpu.reg.pc.*);
+    fmt::print_str(".\n");
+    return data;
   } else if addr >= 0x8000 {
     let addr = addr - 0x8000;
     if (the_rom.program_size.* == 0x4000) && (addr >= 0x4000) {
