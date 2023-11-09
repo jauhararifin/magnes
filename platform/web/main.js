@@ -9,6 +9,11 @@ window.onload = async function() {
   charDebugCtx.mozImageSmoothingEnabled = false;
   charDebugCtx.imageSmoothingEnabled = false;
 
+  paletteCanvasCtx = paletteCanvas.getContext('2d')
+  paletteCanvasCtx.webkitImageSmoothingEnabled = false
+  paletteCanvasCtx.mozImageSmoothingEnabled = false
+  paletteCanvasCtx.imageSmoothingEnabled = false
+
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data
 
@@ -58,6 +63,7 @@ window.onload = async function() {
     getFrameBuffer,
     debugCPU,
     getDebugTileFramebufer,
+    getDebugPaletteImage,
   } = module.instance.exports;
   memoryBuffer = memory.buffer
 
@@ -114,6 +120,16 @@ window.onload = async function() {
     }
   }
 
+  function renderToCanvas(the_canvas, ctx, image) {
+    const [framebuffer, width, height] = image;
+    const pixels = new Uint8ClampedArray(memoryBuffer, framebuffer, width*height*4);
+    const imageData = new ImageData(pixels, width, height);
+
+    the_canvas.width = width;
+    the_canvas.heiht = height;
+    ctx.putImageData(imageData, 0, 0)
+  }
+
   let playing = false
   let lastExecuted = Math.round(performance.now() * 1_000_000)
   function frame() {
@@ -149,10 +165,11 @@ window.onload = async function() {
       }
       ctx.putImageData(imageData, 0, 0)
 
-      const charTileDebugFramebuffer = getDebugTileFramebufer()
-      const pixels = new Uint8ClampedArray(memoryBuffer, charTileDebugFramebuffer, 32*16*8*8*4);
-      const charDebugImageData = new ImageData(pixels, 32*8, 16*8);
-      charDebugCtx.putImageData(charDebugImageData, 0, 0)
+      const debugTile = getDebugTileFramebufer()
+      renderToCanvas(charTileCanvas, charDebugCtx, debugTile)
+
+      const palettes = getDebugPaletteImage()
+      renderToCanvas(paletteCanvas, paletteCanvasCtx, [palettes[0], 33, 1])
     }
 
     requestAnimationFrame(frame)

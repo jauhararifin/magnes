@@ -101,7 +101,11 @@ fn debug_cpu(): cpu::CPU {
 }
 
 @wasm_export("getDebugTileFramebufer")
-fn get_debug_tile_framebuffer(): [*]u8 {
-  return bus::the_ppu.debug.tile_framebuffer.*;
+fn get_debug_tile_framebuffer(): ppu::Image {
+  return ppu::get_debug_tile_framebuffer(bus::the_ppu);
 }
 
+@wasm_export("getDebugPaletteImage")
+fn get_debug_palette_framebuffer(): ppu::DebugPalette {
+  return ppu::get_debug_palette_framebuffer(bus::the_ppu);
+}
