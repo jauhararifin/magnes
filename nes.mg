@@ -38,7 +38,7 @@ fn on_keydown_arrow_down() {
 }
 
 let remaining_elapsed_nanosecond: i64 = 0;
-let cycle_rate: i64 = 40000; // cycles per second
+let cycle_rate: i64 = 2_000_000; // cycles per second
 let cycle_period: i64 = 1_000_000_000 / cycle_rate;
 @wasm_export("tick")
 fn tick(elapsed: i64) {
@@ -81,11 +81,6 @@ fn get_ram(): [*]u8 {
   return bus::ram as [*]u8;
 }
 
-@wasm_export("getFrameBuffer")
-fn get_frame_buffer(): [*]u8 {
-  return bus::ram[0x200] as [*]u8;
-}
-
 @wasm_export("reset")
 fn reset() {
   // bus::write(0xfffc, 0x00);
@@ -108,4 +103,9 @@ fn get_debug_tile_framebuffer(): ppu::Image {
 @wasm_export("getDebugPaletteImage")
 fn get_debug_palette_framebuffer(): ppu::DebugPalette {
   return ppu::get_debug_palette_framebuffer(bus::the_ppu);
+}
+
+@wasm_export("getScreenFramebuffer")
+fn get_screen_framebuffer(): ppu::Image {
+  return ppu::get_screen_framebuffer(bus::the_ppu);
 }

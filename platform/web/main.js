@@ -64,6 +64,7 @@ window.onload = async function() {
     debugCPU,
     getDebugTileFramebufer,
     getDebugPaletteImage,
+    getScreenFramebuffer,
   } = module.instance.exports;
   memoryBuffer = memory.buffer
 
@@ -120,13 +121,13 @@ window.onload = async function() {
     }
   }
 
-  function renderToCanvas(the_canvas, ctx, image) {
+  function renderToCanvas(theCanvas, ctx, image) {
     const [framebuffer, width, height] = image;
     const pixels = new Uint8ClampedArray(memoryBuffer, framebuffer, width*height*4);
     const imageData = new ImageData(pixels, width, height);
 
-    the_canvas.width = width;
-    the_canvas.heiht = height;
+    theCanvas.width = width;
+    theCanvas.height = height;
     ctx.putImageData(imageData, 0, 0)
   }
 
@@ -139,37 +140,14 @@ window.onload = async function() {
       tick(BigInt(Math.round(elapsed)))
       lastExecuted = currentTime
 
-      const framebuffer = getFrameBuffer()
-      const buff = new Uint8Array(memoryBuffer);
-      for (let i = 0; i < 32*32; i++) {
-        const color_map = {
-          0: [0,0,0],
-          1: [255,255,255],
-          2: [128,128,128],
-          9: [128,128,128],
-          3: [255,0,0],
-          10: [255,0,0],
-          4: [0,255,0],
-          11: [0,255,0],
-          5: [0,0,255],
-          12: [0,0,255],
-          6: [255,0,255],
-          13: [255,0,255],
-          7: [0,255,255],
-          14: [0,255,255],
-        }
-        const color = color_map[buff[framebuffer + i]] || [255,255,0];
-        data[i*4+0] = color[0]
-        data[i*4+1] = color[1]
-        data[i*4+2] = color[2]
-      }
-      ctx.putImageData(imageData, 0, 0)
-
       const debugTile = getDebugTileFramebufer()
       renderToCanvas(charTileCanvas, charDebugCtx, debugTile)
 
       const palettes = getDebugPaletteImage()
       renderToCanvas(paletteCanvas, paletteCanvasCtx, [palettes[0], 33, 1])
+
+      const screen = getScreenFramebuffer();
+      renderToCanvas(canvas, ctx, screen)
     }
 
     requestAnimationFrame(frame)
@@ -187,7 +165,7 @@ window.onload = async function() {
     reader.onload = function(e) {
       const arrayBuffer = e.target.result;
       const byteArray = new Uint8Array(arrayBuffer);
-      if (byteArray.length > 65536) {
+      if (byteArray.length > 1073741824) {
         alert("ROM is too big")
         return
       }

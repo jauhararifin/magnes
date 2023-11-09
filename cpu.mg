@@ -406,25 +406,17 @@ fn interrupt(cpu: *CPU) {
 }
 
 fn non_maskable_interrupt(cpu: *CPU) {
-  bus::write(cpu.reg.sp.* as u16, (cpu.reg.pc.* >> 8) as u8);
-  cpu.reg.sp.* = cpu.reg.sp.* - 1;
-
-  bus::write(cpu.reg.sp.* as u16, (cpu.reg.pc.* & 0xff) as u8);
-  cpu.reg.sp.* = cpu.reg.sp.* - 1;
+  stack_push_u16(cpu, cpu.reg.pc.*);
 
   cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_BREAK;
   cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_1;
   cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_INTERRUPT_DISABLE;
-  bus::write(cpu.reg.sp.* as u16, cpu.reg.status.*);
-  cpu.reg.sp.* = cpu.reg.sp.* - 1;
+  stack_push(cpu, cpu.reg.status.*);
 
   let addr_0: u16 = 0xfffa;
   let lo = bus::read(addr_0) as u16;
   let hi = bus::read(addr_0 + 1) as u16;
-  cpu.reg.pc.* = hi << 8 | lo;
-  fmt::print_str("NMI executed pc=");
-  fmt::print_u16(cpu.reg.pc.*);
-  fmt::print_str("\n");
+  cpu.reg.pc.* = (hi << 8) | lo;
 }
 
 fn tick(cpu: *CPU, cycles: i64) {

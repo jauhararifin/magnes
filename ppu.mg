@@ -60,7 +60,15 @@ struct PPU {
   // maybe instead of storing the color id like this, 
   // we can store the actual color directly.
   palette:         [*]u8,
-  vram:            [*]u8, // 2KB. also known as nametable
+  // VRAM also known as nametable, which is 2KB long.
+  // NES screen is 256 x 240 and composed of 8x8 tiles
+  // so there are 256/8=32 tile width, and 240/8=30 tile height.
+  // The first 32*30=960 bytes represent the tile used to render
+  // the screen.
+  // The next 64 bytes specify which color pallete to use. it's
+  // defined every 4x4 tile.
+  // So there are 960 + 64 = 1024 bytes to define a single frame.
+  vram:            [*]u8,
   mirroring:       u8,
 
   reg: Register,
@@ -70,6 +78,8 @@ struct PPU {
   addr_hi:       u8,
   data:          u8,
   is_reading_lo: bool,
+
+  screen_framebuffer: [*]Color,
 
   debug: Debug,
 
@@ -96,6 +106,7 @@ fn new(): *PPU {
   p.debug.palette_framebuffer.* = mem::alloc_array::<Color>(1 + 4*4 + 4*4);
   p.vram.*                      = mem::alloc_array::<u8>(0x800);
   p.palette.*                   = mem::alloc_array::<u8>(0x20);
+  p.screen_framebuffer.*        = mem::alloc_array::<Color>(256 * 240);
 
   reset(p);
   return p;
@@ -104,6 +115,7 @@ fn new(): *PPU {
 fn load_rom(ppu: *PPU, cart: *rom::ROM) {
   ppu.characters.* = cart.characters.*;
   ppu.characters_size.* = cart.characters_size.*;
+  ppu.mirroring.* = cart.mirroring.*;
 
   update_debug_chr_tile(ppu);
 }
@@ -137,6 +149,8 @@ fn tick(ppu: *PPU, cycles: i64) {
       ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_VBLANK_STARTED;
     }
   }
+
+  render_screen(bus::the_ppu);
 }
 
 fn set_register(ppu: *PPU, id: u8, data: u8) {
@@ -213,13 +227,14 @@ fn read_data(ppu: *PPU): u8 {
   let addr = get_addr(ppu);
   inc_addr(ppu);
 
-  if addr < 0x2fff {
+  if addr < 0x2000 {
     let data = ppu.data.*;
     ppu.data.* = ppu.characters.*[addr].*;
     return data;
   } else if addr < 0x3000 {
     let data = ppu.data.*;
-    ppu.data.* = 0; // get data from vram
+    let addr = mirror_vram(ppu.mirroring.*, addr - 0x2000);
+    ppu.data.* = ppu.vram.*[addr].*;
     return data;
   } else if addr < 0x3f00 {
     fmt::print_str("addr 0x3000 - 0x3f00 shouldn't be used\n")
@@ -239,19 +254,56 @@ fn read_data(ppu: *PPU): u8 {
   return 0;
 }
 
+// Reference: https://www.nesdev.org/wiki/Mirroring
+fn mirror_vram(mirroring: u8, index: u16): u16 {
+  // nametable map:
+  // 0 1
+  // 2 3
+  let name_table = index / 0x400;
+  if mirroring == rom::MIRRORING_HORIZONTAL {
+    // [A][a]
+    // [B][b]
+    if name_table == 1 || name_table == 2 {
+      return index - 0x400;
+    } else if name_table == 3 {
+      return index - 0x800;
+    } else {
+      return index;
+    }
+  } else if mirroring == rom::MIRRORING_VERTICAL {
+    // [A][B]
+    // [a][b]
+    if name_table == 2 || name_table == 3 {
+      return index - 0x800;
+    } else {
+      return index;
+    }
+  } else if mirroring == rom::MIRRORING_FOUR_SCREEN {
+    // [A][B]
+    // [C][D]
+    return index;
+  }
+
+  // [A][a]
+  // [a][a]
+  return index % 0x400;
+}
+
 fn write_data(ppu: *PPU, data: u8) {
   let addr = get_addr(ppu);
-  fmt::print_str("write data to ppu ");
-  fmt::print_u16(addr);
-  fmt::print_str(", data=");
-  fmt::print_u8(data);
-  fmt::print_str("\n");
+  // fmt::print_str("write data to ppu ");
+  // fmt::print_u16(addr);
+  // fmt::print_str(", data=");
+  // fmt::print_u8(data);
+  // fmt::print_str("\n");
   inc_addr(ppu);
 
-  if addr < 0x2fff {
-    // writing chr rom
+  if addr < 0x2000 {
+    fmt::print_str("writing to chr rom shouldn't be allowed")
+    wasm::trap();
   } else if addr < 0x3000 {
-    // writing vram
+    let addr = mirror_vram(ppu.mirroring.*, addr - 0x2000);
+    ppu.vram.*[addr].* = data;
   } else if addr < 0x3f00 {
     fmt::print_str("reading addr 0x3000 - 0x3f00\n")
     wasm::trap();
@@ -264,19 +316,19 @@ fn write_data(ppu: *PPU, data: u8) {
     ppu.palette.*[addr-0x3f00].* = data;
     let color = get_color(data);
     ppu.debug.palette_framebuffer.*[addr-0x3f00].* = color;
-    fmt::print_str("setup palette framebuffer at ");
-    fmt::print_usize(ppu.debug.palette_framebuffer.* as usize);
-    fmt::print_str(",addr=");
-    fmt::print_u16(addr);
-    fmt::print_str(",r=");
-    fmt::print_u8(color.r);
-    fmt::print_str(",g=");
-    fmt::print_u8(color.g);
-    fmt::print_str(",b=");
-    fmt::print_u8(color.b);
-    fmt::print_str(",a=");
-    fmt::print_u8(color.a);
-    fmt::print_str("\n");
+    // fmt::print_str("setup palette framebuffer at ");
+    // fmt::print_usize(ppu.debug.palette_framebuffer.* as usize);
+    // fmt::print_str(",addr=");
+    // fmt::print_u16(addr);
+    // fmt::print_str(",r=");
+    // fmt::print_u8(color.r);
+    // fmt::print_str(",g=");
+    // fmt::print_u8(color.g);
+    // fmt::print_str(",b=");
+    // fmt::print_u8(color.b);
+    // fmt::print_str(",a=");
+    // fmt::print_u8(color.a);
+    // fmt::print_str("\n");
   } else {
     fmt::print_str("reading addr above 3f00\n")
     wasm::trap();
@@ -527,5 +579,89 @@ fn get_debug_palette_framebuffer(ppu: *PPU): DebugPalette {
       width: 4,
       height: 1,
     }
+  };
+}
+
+fn render_screen(ppu: *PPU) {
+  let nametable: u8 = (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_1) | (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_2);
+  let nametable: u16 = nametable as u16;
+  let vram_addr = nametable * 0x400;
+
+  let pattern_addr: u16 = 0;
+  if (ppu.reg.control.* & CONTROL_FLAG_BACKGROUND_PATTERN_ADDR) != 0 {
+    pattern_addr = 0x1000;
+  }
+
+  let yi = 0;
+  while yi < 30 {
+    let xi = 0;
+    while xi < 32 {
+      let vram_addr = mirror_vram(ppu.mirroring.*, vram_addr + (yi as u16) * 32 + (xi as u16));
+      let tile_id = ppu.vram.*[vram_addr].* as u16;
+      let p = ppu.characters.*[pattern_addr + tile_id * 16] as [*]u8;
+
+      let attribute_byte_offset = (yi / 4) * 8 + (xi / 4);
+      let attribute_byte = ppu.vram.*[32 * 30 + attribute_byte_offset].*;
+      let attr_y = (yi % 4) / 2;
+      let attr_x = (xi % 4) / 2;
+      let palette_id: u8 = 0;
+      if attr_y == 0 && attr_x == 0 {
+        palette_id = (attribute_byte >> 0) & 0b11;
+      } else if attr_y == 0 && attr_x == 1 {
+        palette_id = (attribute_byte >> 2) & 0b11;
+      } else if attr_y == 1 && attr_x == 0 {
+        palette_id = (attribute_byte >> 4) & 0b11;
+      } else {
+        palette_id = (attribute_byte >> 6) & 0b11;
+      }
+
+      let y = 0;
+      while y < 8 {
+        let hi = p[y].*;
+        let lo = p[y + 8].*;
+
+        let x7 = ((hi & 0b0000_0001) << 1) |  (lo & 0b0000_0001);
+        let x6 =  (hi & 0b0000_0010)       | ((lo & 0b0000_0010) >> 1);
+        let x5 = ((hi & 0b0000_0100) >> 1) | ((lo & 0b0000_0100) >> 2);
+        let x4 = ((hi & 0b0000_1000) >> 2) | ((lo & 0b0000_1000) >> 3);
+        let x3 = ((hi & 0b0001_0000) >> 3) | ((lo & 0b0001_0000) >> 4);
+        let x2 = ((hi & 0b0010_0000) >> 4) | ((lo & 0b0010_0000) >> 5);
+        let x1 = ((hi & 0b0100_0000) >> 5) | ((lo & 0b0100_0000) >> 6);
+        let x0 = ((hi & 0b1000_0000) >> 6) | ((lo & 0b1000_0000) >> 7);
+
+        let framebuffer_offset = yi * 32 * 8 * 8 + y * 32 * 8 + xi * 8;
+        set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 0], x0);
+        set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 1], x1);
+        set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 2], x2);
+        set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 3], x3);
+        set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 4], x4);
+        set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 5], x5);
+        set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 6], x6);
+        set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 7], x7);
+
+        y = y + 1;
+      }
+
+      xi = xi + 1;
+    }
+    yi = yi + 1;
+  }
+}
+
+fn set_background_color(ppu: *PPU, palette_id: u8, pixel: *Color, color_offset: u8) {
+  let color_idx: u8 = 0;
+  if color_offset == 0 {
+    color_idx = ppu.palette.*[0].*;
+  } else {
+    color_idx = ppu.palette.*[palette_id * 4 + color_offset].*;
+  }
+  pixel.* = palette[color_idx].*;
+}
+
+fn get_screen_framebuffer(ppu: *PPU): Image {
+  return Image{
+    framebuffer: ppu.screen_framebuffer.*,
+    width:       32*8,
+    height:      30*8,
   };
 }

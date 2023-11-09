@@ -18,6 +18,11 @@
           image-rendering: -o-crisp-edges;
           image-rendering: crisp-edges;
           -ms-interpolation-mode: nearest-neighbor;
+
+          border: solid 1px black;
+        }
+        p {
+          margin: 10px;
         }
         #canvas {
           margin: 0;
@@ -38,15 +43,14 @@
   </head>
   <body>
     <div>
-      <div>
+      <div style="margin-bottom: 10px">
         <input type="file" id="romInput" name="myFile">
         <button id="playButton">Play</button>
       </div>
-      <!-- <canvas id="canvas" class="pixelate" width=256 height=240></canvas> -->
       <canvas id="canvas" class="pixelate" width=32 height=32></canvas>
-      <h5>Character Tiles</h5>
+      <p>Character Tiles</p>
       <canvas id="charTileCanvas" class="pixelate" width=256 height=128></canvas>
-      <h5>Palette</h5>
+      <p>Palette</p>
       <canvas id="paletteCanvas" class="pixelate" width=33 height=1></canvas>
     </div>
     <script src="/main.js"></script>
