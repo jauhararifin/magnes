@@ -100,6 +100,14 @@ fn write(addr: u16, data: u8) {
     }
 
     ppu::set_register(the_ppu, (addr as u8) & 0x07, data);
+  } else if addr == 0x4014 {
+    let addr = (data as u16) << 8;
+    let i: u16 = 0;
+    while i < 256 {
+      let b = read(addr + i);
+      ppu::write_oam(the_ppu, b);
+      i = i + 1;
+    }
   } else {
     if debug {
       fmt::print_str("invalid write ");

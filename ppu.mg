@@ -69,6 +69,8 @@ struct PPU {
   // defined every 4x4 tile.
   // So there are 960 + 64 = 1024 bytes to define a single frame.
   vram:            [*]u8,
+  // object array mapper, 64 * 4 bytes.
+  oam:             [*]u8,
   mirroring:       u8,
 
   reg: Register,
@@ -78,6 +80,7 @@ struct PPU {
   addr_hi:       u8,
   data:          u8,
   is_reading_lo: bool,
+  oam_addr:      u8,
 
   screen_framebuffer: [*]Color,
 
@@ -107,6 +110,8 @@ fn new(): *PPU {
   p.debug.palette_framebuffer.* = mem::alloc_array::<Color>(1 + 4*4 + 4*4);
   p.vram.*                      = mem::alloc_array::<u8>(0x800);
   p.palette.*                   = mem::alloc_array::<u8>(0x20);
+  p.oam.*                       = mem::alloc_array::<u8>(64 * 4);
+  p.oam_addr.*                  = 0;
   p.screen_framebuffer.*        = mem::alloc_array::<Color>(256 * 240);
 
   reset(p);
@@ -128,6 +133,7 @@ fn reset(ppu: *PPU) {
   ppu.addr_hi.*       = 0;
   ppu.data.*          = 0;
   ppu.is_reading_lo.* = false;
+  ppu.oam_addr.*      = 0;
 }
 
 fn tick(ppu: *PPU, cycles: i64) {
@@ -151,7 +157,8 @@ fn tick(ppu: *PPU, cycles: i64) {
     }
   }
 
-  render_screen(ppu);
+  render_background(ppu);
+  render_objects(ppu);
   update_debug_chr_tile(ppu);
 }
 
@@ -169,7 +176,9 @@ fn set_register(ppu: *PPU, id: u8, data: u8) {
     fmt::print_str("register 2 is read only\n");
     wasm::trap();
   } else if id == 3 {
+    ppu.oam_addr.* = data;
   } else if id == 4 {
+    write_oam(ppu, data);
   } else if id == 5 {
   } else if id == 6 {
     put_addr(ppu, data);
@@ -195,6 +204,7 @@ fn get_register(ppu: *PPU, id: u8): u8 {
   } else if id == 3 {
     fmt::print_str("register 3 is write only\n"); wasm::trap();
   } else if id == 4 {
+    return ppu.oam.*[ppu.oam_addr.*].*;
   } else if id == 5 {
     fmt::print_str("register 5 is write only\n"); wasm::trap();
   } else if id == 6 {
@@ -332,7 +342,7 @@ fn write_data(ppu: *PPU, data: u8) {
     // fmt::print_u8(color.a);
     // fmt::print_str("\n");
   } else {
-    fmt::print_str("reading addr above 3f00\n")
+    fmt::print_str("writing addr above 0x4000\n")
     wasm::trap();
   }
 }
@@ -356,6 +366,11 @@ fn get_addr(ppu: *PPU): u16 {
     addr = addr & 0x3fff;
   }
   return addr;
+}
+
+fn write_oam(ppu: *PPU, data: u8) {
+  ppu.oam.*[ppu.oam_addr.*].* = data;
+  ppu.oam_addr.* = ppu.oam_addr.* + 1;
 }
 
 struct Color {
@@ -580,7 +595,7 @@ fn get_debug_palette_framebuffer(ppu: *PPU): DebugPalette {
   };
 }
 
-fn render_screen(ppu: *PPU) {
+fn render_background(ppu: *PPU) {
   let nametable: u8 = (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_1) | (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_2);
   let nametable: u16 = nametable as u16;
   let vram_addr = nametable * 0x400;
@@ -662,4 +677,85 @@ fn get_screen_framebuffer(ppu: *PPU): Image {
     width:       32*8,
     height:      30*8,
   };
+}
+
+fn render_objects(ppu: *PPU) {
+  let i = 0;
+  while i < 64 * 4 {
+    let byte0 = ppu.oam.*[i+0].*;
+    let byte1 = ppu.oam.*[i+1].*;
+    let byte2 = ppu.oam.*[i+2].*;
+    let byte3 = ppu.oam.*[i+3].*;
+
+    let y = byte0;
+    let x = byte3;
+    let tile_id = byte1 as u16;
+
+    let pattern_addr: u16 = 0;
+    if (ppu.reg.control.* & CONTROL_FLAG_SPRITE_PATTERN_ADDR) != 0 {
+      pattern_addr = 0x1000;
+    }
+
+    let palette_id = byte2 & 0b11;
+    let behind_background = (byte2 & 0b0001_0000) != 0;
+    let flip_vertical = (byte2 & 0b1000_0000) != 0;
+    let flip_horizontal = (byte2 & 0b0100_0000) != 0;
+
+    let p = ppu.characters.*[pattern_addr + tile_id * 16] as [*]u8;
+
+    let y_offset: u16 = 0;
+    while y_offset < 8 {
+      let hi = p[y_offset].*;
+      let lo = p[y_offset + 8].*;
+
+      let x7 = ((lo & 0b0000_0001) << 1) |  (hi & 0b0000_0001);
+      let x6 =  (lo & 0b0000_0010)       | ((hi & 0b0000_0010) >> 1);
+      let x5 = ((lo & 0b0000_0100) >> 1) | ((hi & 0b0000_0100) >> 2);
+      let x4 = ((lo & 0b0000_1000) >> 2) | ((hi & 0b0000_1000) >> 3);
+      let x3 = ((lo & 0b0001_0000) >> 3) | ((hi & 0b0001_0000) >> 4);
+      let x2 = ((lo & 0b0010_0000) >> 4) | ((hi & 0b0010_0000) >> 5);
+      let x1 = ((lo & 0b0100_0000) >> 5) | ((hi & 0b0100_0000) >> 6);
+      let x0 = ((lo & 0b1000_0000) >> 6) | ((hi & 0b1000_0000) >> 7);
+
+      let y_final = y as u16 + y_offset;
+      if flip_vertical {
+        y_final = y as u16 + 7 - y_offset;
+      }
+
+      let framebuffer_offset = y_final * 32 * 8 + x as u16;
+
+      if flip_horizontal {
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 0], x7);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 1], x6);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 2], x5);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 3], x4);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 4], x3);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 5], x2);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 6], x1);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 7], x0);
+      } else {
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 0], x0);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 1], x1);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 2], x2);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 3], x3);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 4], x4);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 5], x5);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 6], x6);
+        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 7], x7);
+      }
+
+      y_offset = y_offset + 1;
+    }
+
+    i = i + 4;
+  }
+}
+
+fn set_sprite_color(ppu: *PPU, palette_id: u8, pixel: *Color, color_offset: u8) {
+  if color_offset == 0 {
+    return;
+  }
+
+  let color_idx = ppu.palette.*[(palette_id+4) * 4 + color_offset].*;
+  pixel.* = palette[color_idx].*;
 }
