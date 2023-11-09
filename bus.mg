@@ -4,6 +4,7 @@ import wasm "wasm";
 import cpu "cpu";
 import rom "rom";
 import ppu "ppu";
+import joypad "joypad";
 
 let the_cpu: *cpu::CPU = init_cpu();
 let the_ppu: *ppu::PPU = ppu::new();
@@ -11,6 +12,7 @@ let the_rom: *rom::ROM = mem::alloc::<rom::ROM>();
 let ram: [*]u8 = mem::alloc_array::<u8>(0x2000);
 let ppu_register: [*]u8 = mem::alloc_array::<u8>(8);
 let debug: bool = false;
+let joypad_1: *joypad::Joypad = joypad::new();
 
 fn init_cpu(): *cpu::CPU {
   let c = mem::alloc::<cpu::CPU>();
@@ -57,6 +59,11 @@ fn read(addr: u16): u8 {
       fmt::print_str(".\n");
     }
     return data;
+  } else if addr == 0x4016 {
+    return joypad::read(joypad_1);
+    // joypad 1
+  } else if addr == 0x4017 {
+    // joypad 2
   } else if addr >= 0x8000 {
     let addr = addr - 0x8000;
     if (the_rom.program_size.* == 0x4000) && (addr >= 0x4000) {
@@ -108,6 +115,10 @@ fn write(addr: u16, data: u8) {
       ppu::write_oam(the_ppu, b);
       i = i + 1;
     }
+  } else if addr == 0x4016 {
+    joypad::write(joypad_1, data);
+  } else if addr == 0x4017 {
+    // joypad 2
   } else {
     if debug {
       fmt::print_str("invalid write ");

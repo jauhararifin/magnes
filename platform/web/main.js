@@ -51,10 +51,6 @@ window.onload = async function() {
     },
   })
   const {
-    onKeyupArrowUp, onKeydownArrowUp,
-    onKeyupArrowRight, onKeydownArrowRight,
-    onKeyupArrowLeft, onKeydownArrowLeft,
-    onKeyupArrowDown, onKeydownArrowDown,
     tick,
     memory,
     getRom, loadRom,
@@ -66,6 +62,8 @@ window.onload = async function() {
     getDebugPaletteImage,
     setDebugPaletteId,
     getScreenFramebuffer,
+    keydownJoypad1A, keydownJoypad1B, keydownJoypad1Select, keydownJoypad1Start, keydownJoypad1Up, keydownJoypad1Down, keydownJoypad1Left, keydownJoypad1Right,
+    keyupJoypad1A, keyupJoypad1B, keyupJoypad1Select, keyupJoypad1Start, keyupJoypad1Up, keyupJoypad1Down, keyupJoypad1Left, keyupJoypad1Right,
   } = module.instance.exports;
   memoryBuffer = memory.buffer
 
@@ -74,25 +72,43 @@ window.onload = async function() {
   }
 
   document.addEventListener('keyup', (event) => {
-    if (event.key === 'ArrowUp')
-      onKeyupArrowUp();
-    else if (event.key === 'ArrowRight')
-      onKeyupArrowRight();
-    else if (event.key === 'ArrowLeft')
-      onKeyupArrowLeft();
-    else if (event.key === 'ArrowDown')
-      onKeyupArrowDown();
+    const key = event.key.toLowerCase();
+    if (key === 'arrowup')
+      keyupJoypad1Up();
+    else if (key === 'arrowright')
+      keyupJoypad1Right();
+    else if (key === 'arrowleft')
+      keyupJoypad1Left();
+    else if (key === 'arrowdown')
+      keyupJoypad1Down();
+    else if (key === 'x')
+      keyupJoypad1A();
+    else if (key === 'z')
+      keyupJoypad1B();
+    else if (key === 'enter')
+      keyupJoypad1Start();
+    else if (key === 'control')
+      keyupJoypad1Select();
   });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowUp')
-      onKeydownArrowUp();
-    else if (event.key === 'ArrowRight')
-      onKeydownArrowRight();
-    else if (event.key === 'ArrowLeft')
-      onKeydownArrowLeft();
-    else if (event.key === 'ArrowDown')
-      onKeydownArrowDown();
+    const key = event.key.toLowerCase();
+    if (key === 'arrowup')
+      keydownJoypad1Up();
+    else if (key === 'arrowright')
+      keydownJoypad1Right();
+    else if (key === 'arrowleft')
+      keydownJoypad1Left();
+    else if (key === 'arrowdown')
+      keydownJoypad1Down();
+    else if (key === 'x')
+      keydownJoypad1A();
+    else if (key === 'z')
+      keydownJoypad1B();
+    else if (key === 'enter')
+      keydownJoypad1Start();
+    else if (key === 'control')
+      keydownJoypad1Select();
   });
 
   function getString(offset) {
@@ -184,9 +200,7 @@ window.onload = async function() {
         const message = getString(resultError);
         alert(message);
       } else {
-        console.log('resetting')
         reset();
-        console.log("getDebugTileFramebufer", getDebugTileFramebufer())
         playing = true;
         lastExecuted = performance.now();
       }

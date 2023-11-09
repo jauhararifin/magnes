@@ -4,38 +4,7 @@ import bus "bus";
 import cpu "cpu";
 import ppu "ppu";
 import fmt "fmt";
-
-@wasm_export("onKeyupArrowUp")
-fn on_keyup_arrow_up() {}
-
-@wasm_export("onKeyupArrowLeft")
-fn on_keyup_arrow_left() {}
-
-@wasm_export("onKeyupArrowRight")
-fn on_keyup_arrow_right() {}
-
-@wasm_export("onKeyupArrowDown")
-fn on_keyup_arrow_down() {}
-
-@wasm_export("onKeydownArrowUp")
-fn on_keydown_arrow_up() {
-  bus::write(0x00ff, 0x77);
-}
-
-@wasm_export("onKeydownArrowLeft")
-fn on_keydown_arrow_left() {
-  bus::write(0x00ff, 0x61);
-}
-
-@wasm_export("onKeydownArrowRight")
-fn on_keydown_arrow_right() {
-  bus::write(0x00ff, 0x64);
-}
-
-@wasm_export("onKeydownArrowDown")
-fn on_keydown_arrow_down() {
-  bus::write(0x00ff, 0x73);
-}
+import joypad "joypad";
 
 let remaining_elapsed_nanosecond: i64 = 0;
 let cycle_rate: i64 = 2_000_000; // cycles per second
@@ -83,11 +52,9 @@ fn get_ram(): [*]u8 {
 
 @wasm_export("reset")
 fn reset() {
-  // bus::write(0xfffc, 0x00);
-  // bus::write(0xfffd, 0x06);
-  // bus::write(0x00fe, 0x2a);
   cpu::reset(bus::the_cpu);
   ppu::reset(bus::the_ppu);
+  joypad::reset(bus::joypad_1);
 }
 
 @wasm_export("debugCPU")
@@ -114,3 +81,51 @@ fn set_debug_palette_id(id: u8) {
 fn get_screen_framebuffer(): ppu::Image {
   return ppu::get_screen_framebuffer(bus::the_ppu);
 }
+
+@wasm_export("keydownJoypad1A")
+fn keydown_joypad1_a() { joypad::press(bus::joypad_1, joypad::JOYPAD_BUTTON_A); }
+
+@wasm_export("keydownJoypad1B")
+fn keydown_joypad1_b() { joypad::press(bus::joypad_1, joypad::JOYPAD_BUTTON_B);}
+
+@wasm_export("keydownJoypad1Select")
+fn keydown_joypad1_select() { joypad::press(bus::joypad_1, joypad::JOYPAD_BUTTON_SELECT);}
+
+@wasm_export("keydownJoypad1Start")
+fn keydown_joypad1_start() { joypad::press(bus::joypad_1, joypad::JOYPAD_BUTTON_START);}
+
+@wasm_export("keydownJoypad1Up")
+fn keydown_joypad1_up() { joypad::press(bus::joypad_1, joypad::JOYPAD_BUTTON_UP);}
+
+@wasm_export("keydownJoypad1Down")
+fn keydown_joypad1_down() { joypad::press(bus::joypad_1, joypad::JOYPAD_BUTTON_DOWN); }
+
+@wasm_export("keydownJoypad1Left")
+fn keydown_joypad1_left() { joypad::press(bus::joypad_1, joypad::JOYPAD_BUTTON_LEFT);}
+
+@wasm_export("keydownJoypad1Right")
+fn keydown_joypad1_right() { joypad::press(bus::joypad_1, joypad::JOYPAD_BUTTON_RIGHT);}
+
+@wasm_export("keyupJoypad1A")
+fn keyup_joypad1_a() { joypad::unpress(bus::joypad_1, joypad::JOYPAD_BUTTON_A); }
+
+@wasm_export("keyupJoypad1B")
+fn keyup_joypad1_b() { joypad::unpress(bus::joypad_1, joypad::JOYPAD_BUTTON_B);}
+
+@wasm_export("keyupJoypad1Select")
+fn keyup_joypad1_select() { joypad::unpress(bus::joypad_1, joypad::JOYPAD_BUTTON_SELECT);}
+
+@wasm_export("keyupJoypad1Start")
+fn keyup_joypad1_start() { joypad::unpress(bus::joypad_1, joypad::JOYPAD_BUTTON_START);}
+
+@wasm_export("keyupJoypad1Up")
+fn keyup_joypad1_up() { joypad::unpress(bus::joypad_1, joypad::JOYPAD_BUTTON_UP);}
+
+@wasm_export("keyupJoypad1Down")
+fn keyup_joypad1_down() { joypad::unpress(bus::joypad_1, joypad::JOYPAD_BUTTON_DOWN);}
+
+@wasm_export("keyupJoypad1Left")
+fn keyup_joypad1_left() { joypad::unpress(bus::joypad_1, joypad::JOYPAD_BUTTON_LEFT);}
+
+@wasm_export("keyupJoypad1Right")
+fn keyup_joypad1_right() { joypad::unpress(bus::joypad_1, joypad::JOYPAD_BUTTON_RIGHT);}
