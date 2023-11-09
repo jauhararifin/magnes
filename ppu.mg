@@ -95,6 +95,7 @@ struct Register {
 struct Debug {
   tile_framebuffer:    [*]Color,
   palette_framebuffer: [*]Color,
+  debug_palette_id:    u8,
 }
 
 fn new(): *PPU {
@@ -150,7 +151,8 @@ fn tick(ppu: *PPU, cycles: i64) {
     }
   }
 
-  render_screen(bus::the_ppu);
+  render_screen(ppu);
+  update_debug_chr_tile(ppu);
 }
 
 fn set_register(ppu: *PPU, id: u8, data: u8) {
@@ -465,25 +467,25 @@ fn update_debug_chr_tile(ppu: *PPU) {
           let hi = p[y].*;
           let lo = p[y + 8].*;
 
-          let x7 = ((hi & 0b0000_0001) << 1) |  (lo & 0b0000_0001);
-          let x6 =  (hi & 0b0000_0010)       | ((lo & 0b0000_0010) >> 1);
-          let x5 = ((hi & 0b0000_0100) >> 1) | ((lo & 0b0000_0100) >> 2);
-          let x4 = ((hi & 0b0000_1000) >> 2) | ((lo & 0b0000_1000) >> 3);
-          let x3 = ((hi & 0b0001_0000) >> 3) | ((lo & 0b0001_0000) >> 4);
-          let x2 = ((hi & 0b0010_0000) >> 4) | ((lo & 0b0010_0000) >> 5);
-          let x1 = ((hi & 0b0100_0000) >> 5) | ((lo & 0b0100_0000) >> 6);
-          let x0 = ((hi & 0b1000_0000) >> 6) | ((lo & 0b1000_0000) >> 7);
+          let x7 = ((lo & 0b0000_0001) << 1) |  (hi & 0b0000_0001);
+          let x6 =  (lo & 0b0000_0010)       | ((hi & 0b0000_0010) >> 1);
+          let x5 = ((lo & 0b0000_0100) >> 1) | ((hi & 0b0000_0100) >> 2);
+          let x4 = ((lo & 0b0000_1000) >> 2) | ((hi & 0b0000_1000) >> 3);
+          let x3 = ((lo & 0b0001_0000) >> 3) | ((hi & 0b0001_0000) >> 4);
+          let x2 = ((lo & 0b0010_0000) >> 4) | ((hi & 0b0010_0000) >> 5);
+          let x1 = ((lo & 0b0100_0000) >> 5) | ((hi & 0b0100_0000) >> 6);
+          let x0 = ((lo & 0b1000_0000) >> 6) | ((hi & 0b1000_0000) >> 7);
 
           let framebuffer_offset = (yi * 32 * 8 * 8) + (y * 32 * 8) + (xi * 8) + (bank * 8*16);
           let framebuffer = ppu.debug.tile_framebuffer.*;
-          set_debug_color(framebuffer[framebuffer_offset + 0], x0);
-          set_debug_color(framebuffer[framebuffer_offset + 1], x1);
-          set_debug_color(framebuffer[framebuffer_offset + 2], x2);
-          set_debug_color(framebuffer[framebuffer_offset + 3], x3);
-          set_debug_color(framebuffer[framebuffer_offset + 4], x4);
-          set_debug_color(framebuffer[framebuffer_offset + 5], x5);
-          set_debug_color(framebuffer[framebuffer_offset + 6], x6);
-          set_debug_color(framebuffer[framebuffer_offset + 7], x7);
+          set_debug_color(ppu, framebuffer[framebuffer_offset + 0], x0);
+          set_debug_color(ppu, framebuffer[framebuffer_offset + 1], x1);
+          set_debug_color(ppu, framebuffer[framebuffer_offset + 2], x2);
+          set_debug_color(ppu, framebuffer[framebuffer_offset + 3], x3);
+          set_debug_color(ppu, framebuffer[framebuffer_offset + 4], x4);
+          set_debug_color(ppu, framebuffer[framebuffer_offset + 5], x5);
+          set_debug_color(ppu, framebuffer[framebuffer_offset + 6], x6);
+          set_debug_color(ppu, framebuffer[framebuffer_offset + 7], x7);
 
           y = y + 1;
         }
@@ -496,18 +498,14 @@ fn update_debug_chr_tile(ppu: *PPU) {
   }
 }
 
-fn set_debug_color(pixel: *Color, color_id: u8) {
-  let color: Color;
+fn set_debug_color(ppu: *PPU, pixel: *Color, color_id: u8) {
+  let c: u8 = 0;
   if color_id == 0 {
-    color = palette[0x01].*;
-  } else if color_id == 1 {
-    color = palette[0x23].*;
-  } else if color_id == 2 {
-    color = palette[0x27].*;
-  } else if color_id == 3 {
-    color = palette[0x30].*;
+    c = ppu.palette.*[0].*;
+  } else {
+    c = ppu.palette.*[ppu.debug.debug_palette_id.* * 4 + color_id].*;
   }
-  pixel.* = color;
+  pixel.* = palette[c].*;
 }
 
 struct Image {
@@ -611,7 +609,7 @@ fn render_screen(ppu: *PPU) {
         palette_id = (attribute_byte >> 2) & 0b11;
       } else if attr_y == 1 && attr_x == 0 {
         palette_id = (attribute_byte >> 4) & 0b11;
-      } else {
+      } else if attr_y == 1 && attr_x == 1 {
         palette_id = (attribute_byte >> 6) & 0b11;
       }
 
@@ -620,14 +618,14 @@ fn render_screen(ppu: *PPU) {
         let hi = p[y].*;
         let lo = p[y + 8].*;
 
-        let x7 = ((hi & 0b0000_0001) << 1) |  (lo & 0b0000_0001);
-        let x6 =  (hi & 0b0000_0010)       | ((lo & 0b0000_0010) >> 1);
-        let x5 = ((hi & 0b0000_0100) >> 1) | ((lo & 0b0000_0100) >> 2);
-        let x4 = ((hi & 0b0000_1000) >> 2) | ((lo & 0b0000_1000) >> 3);
-        let x3 = ((hi & 0b0001_0000) >> 3) | ((lo & 0b0001_0000) >> 4);
-        let x2 = ((hi & 0b0010_0000) >> 4) | ((lo & 0b0010_0000) >> 5);
-        let x1 = ((hi & 0b0100_0000) >> 5) | ((lo & 0b0100_0000) >> 6);
-        let x0 = ((hi & 0b1000_0000) >> 6) | ((lo & 0b1000_0000) >> 7);
+        let x7 = ((lo & 0b0000_0001) << 1) |  (hi & 0b0000_0001);
+        let x6 =  (lo & 0b0000_0010)       | ((hi & 0b0000_0010) >> 1);
+        let x5 = ((lo & 0b0000_0100) >> 1) | ((hi & 0b0000_0100) >> 2);
+        let x4 = ((lo & 0b0000_1000) >> 2) | ((hi & 0b0000_1000) >> 3);
+        let x3 = ((lo & 0b0001_0000) >> 3) | ((hi & 0b0001_0000) >> 4);
+        let x2 = ((lo & 0b0010_0000) >> 4) | ((hi & 0b0010_0000) >> 5);
+        let x1 = ((lo & 0b0100_0000) >> 5) | ((hi & 0b0100_0000) >> 6);
+        let x0 = ((lo & 0b1000_0000) >> 6) | ((hi & 0b1000_0000) >> 7);
 
         let framebuffer_offset = yi * 32 * 8 * 8 + y * 32 * 8 + xi * 8;
         set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 0], x0);

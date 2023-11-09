@@ -64,9 +64,14 @@ window.onload = async function() {
     debugCPU,
     getDebugTileFramebufer,
     getDebugPaletteImage,
+    setDebugPaletteId,
     getScreenFramebuffer,
   } = module.instance.exports;
   memoryBuffer = memory.buffer
+
+  window.setPalette = function(id) {
+    setDebugPaletteId(id)
+  }
 
   document.addEventListener('keyup', (event) => {
     if (event.key === 'ArrowUp')

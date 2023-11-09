@@ -105,6 +105,11 @@ fn get_debug_palette_framebuffer(): ppu::DebugPalette {
   return ppu::get_debug_palette_framebuffer(bus::the_ppu);
 }
 
+@wasm_export("setDebugPaletteId")
+fn set_debug_palette_id(id: u8) {
+  bus::the_ppu.debug.debug_palette_id.* = id;
+}
+
 @wasm_export("getScreenFramebuffer")
 fn get_screen_framebuffer(): ppu::Image {
   return ppu::get_screen_framebuffer(bus::the_ppu);
