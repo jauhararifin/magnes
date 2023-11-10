@@ -1011,6 +1011,7 @@ fn handle_instr_lsr(cpu: *CPU, mode: u8, addr: u16): i32 {
   }
 
   update_zero_and_neg_flag(cpu, data);
+  cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_NEGATIVE;
   return 0;
 }
 
