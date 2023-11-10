@@ -157,7 +157,7 @@ window.onload = async function() {
   function frame() {
     if (playing) {
       const currentTime = Math.round(performance.now() * 1_000_000)
-      const elapsed = Math.min(currentTime - lastExecuted, 10_000_000)
+      const elapsed = currentTime - lastExecuted
       tick(BigInt(Math.round(elapsed)))
       lastExecuted = currentTime
 

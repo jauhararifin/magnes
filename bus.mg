@@ -10,7 +10,6 @@ let the_cpu: *cpu::CPU = init_cpu();
 let the_ppu: *ppu::PPU = ppu::new();
 let the_rom: *rom::ROM = mem::alloc::<rom::ROM>();
 let ram: [*]u8 = mem::alloc_array::<u8>(0x2000);
-let ppu_register: [*]u8 = mem::alloc_array::<u8>(8);
 let debug: bool = false;
 let joypad_1: *joypad::Joypad = joypad::new();
 
@@ -18,6 +17,14 @@ fn init_cpu(): *cpu::CPU {
   let c = mem::alloc::<cpu::CPU>();
   c.* = cpu::new()
   return c;
+}
+
+fn reset() {
+  let i = 0;
+  while i < 0x2000 {
+    ram[i].* = 0;
+    i = i + 1;
+  }
 }
 
 fn read(addr: u16): u8 {
@@ -43,10 +50,6 @@ fn read(addr: u16): u8 {
     }
     return ram[addr & 0x07ff].*;
   } else if (addr >= 0x2000) && (addr < 0x4000) {
-    if debug {
-      fmt::print_u8(ppu_register[addr & 0x07].*);
-      fmt::print_str("\n");
-    }
     let data = ppu::get_register(the_ppu, (addr & 0x07) as u8);
 
     if debug {

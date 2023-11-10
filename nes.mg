@@ -52,6 +52,7 @@ fn get_ram(): [*]u8 {
 
 @wasm_export("reset")
 fn reset() {
+  bus::reset();
   cpu::reset(bus::the_cpu);
   ppu::reset(bus::the_ppu);
   joypad::reset(bus::joypad_1);
