@@ -218,11 +218,11 @@ fn tick(ppu: *PPU, cycles: i64) {
 }
 
 fn set_register(ppu: *PPU, id: u8, data: u8) {
-  fmt::print_str("set_register id=");
-  fmt::print_u8(id);
-  fmt::print_str(",data=");
-  fmt::print_u8(data);
-  fmt::print_str("\n");
+  // fmt::print_str("set_register id=");
+  // fmt::print_u8(id);
+  // fmt::print_str(",data=");
+  // fmt::print_u8(data);
+  // fmt::print_str("\n");
 
   if id == 0 {
     let old_nmi_status = (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0;
@@ -268,6 +268,8 @@ fn get_register(ppu: *PPU, id: u8): u8 {
   } else if id == 2 {
     let reg = ppu.reg.status.*;
     ppu.reg.status.* = reg & ~STATUS_FLAG_VBLANK_STARTED;
+    ppu.scroll_latch.* = false;
+    ppu.is_reading_lo.* = false;
     return reg;
   } else if id == 3 {
     fmt::print_str("register 3 is write only\n"); wasm::trap();
