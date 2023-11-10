@@ -114,7 +114,9 @@ let OPCODE_SLO: u8 = 61;
 let OPCODE_RLA: u8 = 62;
 let OPCODE_SRE: u8 = 63;
 let OPCODE_RRA: u8 = 64;
-let OPCODE_JAM: u8 = 64;
+let OPCODE_JAM: u8 = 65;
+let OPCODE_ANC: u8 = 66;
+let OPCODE_ALR: u8 = 67;
 
 struct Instruction {
   code:      u8,
@@ -143,7 +145,7 @@ fn init_instruction_map(): [*]Instruction {
   map[0x08].* = Instruction{code: 0x08, opcode: OPCODE_PHP, handler: handle_instr_php, addr_mode: ADDR_MODE_IMP, desc: "PHP:IMP", name: "PHP", cycle: 3};
   map[0x09].* = Instruction{code: 0x09, opcode: OPCODE_ORA, handler: handle_instr_ora, addr_mode: ADDR_MODE_IMM, desc: "ORA:IMM", name: "ORA", cycle: 2};
   map[0x0A].* = Instruction{code: 0x0A, opcode: OPCODE_ASL, handler: handle_instr_asl, addr_mode: ADDR_MODE_A, desc: "ASL:A", name: "ASL", cycle: 2};
-  map[0x0B].* = Instruction{code: 0};
+  map[0x0B].* = Instruction{code: 0x0B, opcode: OPCODE_ANC, handler: handle_instr_anc, addr_mode: ADDR_MODE_IMM, desc: "ANC:IMM", name: "ANC", cycle: 2};
   map[0x0C].* = Instruction{code: 0x0C, opcode: OPCODE_NOP, handler: handle_instr_nop, addr_mode: ADDR_MODE_ABS, desc: "NOP:ABS", name: "NOP", illegal: true, cycle: 4};
   map[0x0D].* = Instruction{code: 0x0D, opcode: OPCODE_ORA, handler: handle_instr_ora, addr_mode: ADDR_MODE_ABS, desc: "ORA:ABS", name: "ORA", cycle: 4};
   map[0x0E].* = Instruction{code: 0x0E, opcode: OPCODE_ASL, handler: handle_instr_asl, addr_mode: ADDR_MODE_ABS, desc: "ASL:ABS", name: "ASL", cycle: 6};
@@ -175,7 +177,7 @@ fn init_instruction_map(): [*]Instruction {
   map[0x28].* = Instruction{code: 0x28, opcode: OPCODE_PLP, handler: handle_instr_plp, addr_mode: ADDR_MODE_IMP, desc: "PLP:IMP", name: "PLP", cycle: 4};
   map[0x29].* = Instruction{code: 0x29, opcode: OPCODE_AND, handler: handle_instr_and, addr_mode: ADDR_MODE_IMM, desc: "AND:IMM", name: "AND", cycle: 2};
   map[0x2A].* = Instruction{code: 0x2A, opcode: OPCODE_ROL, handler: handle_instr_rol, addr_mode: ADDR_MODE_A, desc: "ROL:A", name: "ROL", cycle: 2};
-  map[0x2B].* = Instruction{code: 0};
+  map[0x2B].* = Instruction{code: 0x2B, opcode: OPCODE_ANC, handler: handle_instr_anc, addr_mode: ADDR_MODE_IMM, desc: "ANC:IMM", name: "ANC", cycle: 2};
   map[0x2C].* = Instruction{code: 0x2C, opcode: OPCODE_BIT, handler: handle_instr_bit, addr_mode: ADDR_MODE_ABS, desc: "BIT:ABS", name: "BIT", cycle: 4};
   map[0x2D].* = Instruction{code: 0x2D, opcode: OPCODE_AND, handler: handle_instr_and, addr_mode: ADDR_MODE_ABS, desc: "AND:ABS", name: "AND", cycle: 4};
   map[0x2E].* = Instruction{code: 0x2E, opcode: OPCODE_ROL, handler: handle_instr_rol, addr_mode: ADDR_MODE_ABS, desc: "ROL:ABS", name: "ROL", cycle: 6};
@@ -207,7 +209,7 @@ fn init_instruction_map(): [*]Instruction {
   map[0x48].* = Instruction{code: 0x48, opcode: OPCODE_PHA, handler: handle_instr_pha, addr_mode: ADDR_MODE_IMP, desc: "PHA:IMP", name: "PHA", cycle: 3};
   map[0x49].* = Instruction{code: 0x49, opcode: OPCODE_EOR, handler: handle_instr_eor, addr_mode: ADDR_MODE_IMM, desc: "EOR:IMM", name: "EOR", cycle: 2};
   map[0x4A].* = Instruction{code: 0x4A, opcode: OPCODE_LSR, handler: handle_instr_lsr, addr_mode: ADDR_MODE_A, desc: "LSR:A", name: "LSR", cycle: 2};
-  map[0x4B].* = Instruction{code: 0};
+  map[0x4B].* = Instruction{code: 0x4B, opcode: OPCODE_ALR, handler: handle_instr_alr, addr_mode: ADDR_MODE_IMM, desc: "ALR:IMM", name: "ALR", cycle: 2};
   map[0x4C].* = Instruction{code: 0x4C, opcode: OPCODE_JMP, handler: handle_instr_jmp, addr_mode: ADDR_MODE_ABS, desc: "JMP:ABS", name: "JMP", cycle: 3};
   map[0x4D].* = Instruction{code: 0x4D, opcode: OPCODE_EOR, handler: handle_instr_eor, addr_mode: ADDR_MODE_ABS, desc: "EOR:ABS", name: "EOR", cycle: 4};
   map[0x4E].* = Instruction{code: 0x4E, opcode: OPCODE_LSR, handler: handle_instr_lsr, addr_mode: ADDR_MODE_ABS, desc: "LSR:ABS", name: "LSR", cycle: 6};
@@ -710,6 +712,14 @@ fn update_zero_and_neg_flag(cpu: *CPU, result: u8) {
   }
 }
 
+fn update_neg_flag(cpu: *CPU, result: u8) {
+  if (result & 0b1000_0000) != 0 {
+    cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_NEGATIVE;
+  } else {
+    cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_NEGATIVE;
+  }
+}
+
 fn handle_instr_asl(cpu: *CPU, mode: u8, addr: u16): i32 {
   let data = get_data(cpu, mode, addr);
   if (data & 0b1000_0000) != 0 {
@@ -720,7 +730,7 @@ fn handle_instr_asl(cpu: *CPU, mode: u8, addr: u16): i32 {
 
   let tmp = data << 1;
 
-  if mode == ADDR_MODE_A {
+  if mode == ADDR_MODE_IMP || mode == ADDR_MODE_A {
     cpu.reg.a.* = tmp as u8;
   } else {
     bus::write(addr, tmp as u8);
@@ -994,7 +1004,7 @@ fn handle_instr_lsr(cpu: *CPU, mode: u8, addr: u16): i32 {
   }
 
   let data = (data & 0xff) >> 1;
-  if mode == ADDR_MODE_A {
+  if mode == ADDR_MODE_IMP || mode == ADDR_MODE_A {
     cpu.reg.a.* = data;
   } else {
     bus::write(addr, data);
@@ -1061,7 +1071,7 @@ fn handle_instr_rol(cpu: *CPU, mode: u8, addr: u16): i32 {
     data = data | 1;
   }
 
-  if mode == ADDR_MODE_A {
+  if mode == ADDR_MODE_IMP || mode == ADDR_MODE_A {
     set_reg_a(cpu, data);
   } else {
     bus::write(addr, data);
@@ -1079,13 +1089,13 @@ fn handle_instr_ror(cpu: *CPU, mode: u8, addr: u16): i32 {
   } else {
     cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
   }
-  data = data >> 1;
 
+  data = data >> 1;
   if old_carry {
     data = data | 0b1000_0000;
   }
 
-  if mode == ADDR_MODE_A {
+  if mode == ADDR_MODE_IMP || mode == ADDR_MODE_A {
     set_reg_a(cpu, data);
   } else {
     bus::write(addr, data);
@@ -1201,6 +1211,8 @@ fn handle_instr_dcp(cpu: *CPU, mode: u8, addr: u16): i32 {
   bus::write(addr, data);
   if data <= cpu.reg.a.* {
     cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_CARRY;
+  } else {
+    cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
   }
   update_zero_and_neg_flag(cpu, cpu.reg.a.* - data);
   return 0;
@@ -1230,7 +1242,7 @@ fn handle_instr_slo(cpu: *CPU, mode: u8, addr: u16): i32 {
 
   let tmp = data << 1;
 
-  if mode == ADDR_MODE_A {
+  if mode == ADDR_MODE_IMP || mode == ADDR_MODE_A {
     cpu.reg.a.* = tmp as u8;
   } else {
     bus::write(addr, tmp as u8);
@@ -1257,7 +1269,7 @@ fn handle_instr_rla(cpu: *CPU, mode: u8, addr: u16): i32 {
     data = data | 1;
   }
 
-  if mode == ADDR_MODE_A {
+  if mode == ADDR_MODE_IMP || mode == ADDR_MODE_A {
     set_reg_a(cpu, data);
   } else {
     bus::write(addr, data);
@@ -1277,7 +1289,7 @@ fn handle_instr_sre(cpu: *CPU, mode: u8, addr: u16): i32 {
   }
 
   let data = (data & 0xff) >> 1;
-  if mode == ADDR_MODE_A {
+  if mode == ADDR_MODE_IMP || mode == ADDR_MODE_A {
     cpu.reg.a.* = data;
   } else {
     bus::write(addr, data);
@@ -1304,7 +1316,7 @@ fn handle_instr_rra(cpu: *CPU, mode: u8, addr: u16): i32 {
     data = data | 0b1000_0000;
   }
 
-  if mode == ADDR_MODE_A {
+  if mode == ADDR_MODE_IMP || mode == ADDR_MODE_A {
     set_reg_a(cpu, data);
   } else {
     bus::write(addr, data);
@@ -1317,6 +1329,31 @@ fn handle_instr_rra(cpu: *CPU, mode: u8, addr: u16): i32 {
 
 fn handle_instr_jam(cpu: *CPU, mode: u8, addr: u16): i32 {
   cpu.reg.pc.* = cpu.reg.pc.* - 1;
+  return 0;
+}
+
+fn handle_instr_anc(cpu: *CPU, mode: u8, addr: u16): i32 {
+  let data = get_data(cpu, mode, addr);
+  set_reg_a(cpu, data & cpu.reg.a.*);
+  if (cpu.reg.status.* & FLAG_MASK_NEGATIVE) != 0 {
+    cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_CARRY;
+  } else {
+    cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
+  }
+  return 0;
+}
+
+fn handle_instr_alr(cpu: *CPU, mode: u8, addr: u16): i32 {
+  let data = get_data(cpu, mode, addr);
+  set_reg_a(cpu, data & cpu.reg.a.*);
+
+  if (cpu.reg.a.* & 1) != 0 {
+    cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_CARRY;
+  } else {
+    cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
+  }
+  set_reg_a(cpu, cpu.reg.a.* >> 1);
+
   return 0;
 }
 
