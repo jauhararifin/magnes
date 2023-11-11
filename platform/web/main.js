@@ -244,7 +244,7 @@ window.onload = async function() {
       reader.readAsArrayBuffer(file);
     } else {
       fetch(preselectedRom.value).then(res => res.blob()).then(blob => {
-      reader.readAsArrayBuffer(blob);
+        reader.readAsArrayBuffer(blob);
       })
     }
   }
