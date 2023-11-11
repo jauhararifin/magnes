@@ -110,9 +110,13 @@ struct Register {
 }
 
 struct Debug {
-  tile_framebuffer:    [*]Color,
-  palette_framebuffer: [*]Color,
-  debug_palette_id:    u8,
+  tile_framebuffer:        [*]Color,
+  palette_framebuffer:     [*]Color,
+  debug_palette_id:        u8,
+  nametable_1_framebuffer: [*]Color,
+  nametable_2_framebuffer: [*]Color,
+  nametable_3_framebuffer: [*]Color,
+  nametable_4_framebuffer: [*]Color,
 }
 
 fn new(): *PPU {
@@ -120,14 +124,18 @@ fn new(): *PPU {
 
   // tile framebuffer stores 2 banks of 256 tile of 8x8 pixels of RGBa channel
   // so the size is 2*256*8*8 = 0x8000
-  p.debug.tile_framebuffer.*    = mem::alloc_array::<Color>(0x8000);
-  p.debug.palette_framebuffer.* = mem::alloc_array::<Color>(1 + 4*4 + 4*4);
-  p.vram.*                      = mem::alloc_array::<u8>(0x800);
-  p.palette.*                   = mem::alloc_array::<u8>(0x20);
-  p.oam.*                       = mem::alloc_array::<u8>(64 * 4);
-  p.oam_addr.*                  = 0;
-  p.screen_framebuffer.*        = mem::alloc_array::<Color>(256 * 256); // technically only 256 x 240 is used
-  p.characters.*                = mem::alloc_array::<u8>(0x2000); // 8KB
+  p.debug.tile_framebuffer.*        = mem::alloc_array::<Color>(0x8000);
+  p.debug.palette_framebuffer.*     = mem::alloc_array::<Color>(1 + 4*4 + 4*4);
+  p.debug.nametable_1_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
+  p.debug.nametable_2_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
+  p.debug.nametable_3_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
+  p.debug.nametable_4_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
+  p.vram.*                          = mem::alloc_array::<u8>(0x800);
+  p.palette.*                       = mem::alloc_array::<u8>(0x20);
+  p.oam.*                           = mem::alloc_array::<u8>(64 * 4);
+  p.oam_addr.*                      = 0;
+  p.screen_framebuffer.*            = mem::alloc_array::<Color>(256 * 256); // technically only 256 x 240 is used
+  p.characters.*                    = mem::alloc_array::<u8>(0x2000); // 8KB
 
   reset(p);
   return p;
@@ -215,6 +223,11 @@ fn tick(ppu: *PPU, cycles: i64) {
   render_background_2(ppu);
   render_objects(ppu);
   update_debug_chr_tile(ppu);
+
+  render_nametable(ppu, 0, ppu.debug.nametable_1_framebuffer.*);
+  render_nametable(ppu, 1, ppu.debug.nametable_2_framebuffer.*);
+  render_nametable(ppu, 2, ppu.debug.nametable_3_framebuffer.*);
+  render_nametable(ppu, 3, ppu.debug.nametable_4_framebuffer.*);
 }
 
 fn set_register(ppu: *PPU, id: u8, data: u8) {
@@ -842,6 +855,107 @@ fn set_background_color(ppu: *PPU, palette_id: u8, pixel: *Color, color_offset: 
 fn get_screen_framebuffer(ppu: *PPU): Image {
   return Image{
     framebuffer: ppu.screen_framebuffer.*,
+    width:       32*8,
+    height:      30*8,
+  };
+}
+
+fn render_nametable(ppu: *PPU, nametable: u8, framebuffer: [*]Color) {
+  let nametable: u16 = nametable as u16;
+  let nametable = nametable * 0x400;
+  let nametable = mirror_vram(ppu.mirroring.*, nametable);
+
+  let pattern_addr: u16 = 0;
+  if (ppu.reg.control.* & CONTROL_FLAG_BACKGROUND_PATTERN_ADDR) != 0 {
+    pattern_addr = 0x1000;
+  }
+
+  let yi = 0;
+  while yi < 30 {
+    let xi = 0;
+    while xi < 32 {
+      let vram_addr = nametable + (yi as u16) * 32 + (xi as u16);
+      let tile_id = ppu.vram.*[vram_addr].* as u16;
+      let p = ppu.characters.*[pattern_addr + tile_id * 16] as [*]u8;
+
+      let attribute_byte_offset = (yi / 4) * 8 + (xi / 4);
+      let attribute_byte = ppu.vram.*[nametable + 32 * 30 + attribute_byte_offset as u16].*;
+      let attr_y = (yi % 4) / 2;
+      let attr_x = (xi % 4) / 2;
+      let palette_id: u8 = 0;
+      if attr_y == 0 && attr_x == 0 {
+        palette_id = (attribute_byte >> 0) & 0b11;
+      } else if attr_y == 0 && attr_x == 1 {
+        palette_id = (attribute_byte >> 2) & 0b11;
+      } else if attr_y == 1 && attr_x == 0 {
+        palette_id = (attribute_byte >> 4) & 0b11;
+      } else if attr_y == 1 && attr_x == 1 {
+        palette_id = (attribute_byte >> 6) & 0b11;
+      }
+
+      let y = 0;
+      while y < 8 {
+        let hi = p[y].*;
+        let lo = p[y + 8].*;
+
+        let x: u8 = 0;
+        while x < 8 {
+          let msb: u8 = 0;
+          if (x == 7 && (lo & 1) != 0) || (lo & (0b1000_0000 >> x)) != 0 {
+            msb = 1;
+          }
+
+          let lsb: u8 = 0;
+          if (hi & (0b1000_0000 >> x)) != 0 {
+            lsb = 1;
+          }
+
+          let color_offset = (msb << 1) | lsb;
+
+          let screen_y = yi * 8 + y;
+          let screen_x = xi * 8 + x as isize;
+          let framebuffer_offset = screen_y * 32 * 8 + screen_x;
+          set_background_color(ppu, palette_id, framebuffer[framebuffer_offset], color_offset);
+
+          x = x + 1;
+        }
+
+        y = y + 1;
+      }
+
+      xi = xi + 1;
+    }
+    yi = yi + 1;
+  }
+}
+
+fn get_nametable_1_framebuffer(ppu: *PPU): Image {
+  return Image{
+    framebuffer: ppu.debug.nametable_1_framebuffer.*,
+    width:       32*8,
+    height:      30*8,
+  };
+}
+
+fn get_nametable_2_framebuffer(ppu: *PPU): Image {
+  return Image{
+    framebuffer: ppu.debug.nametable_2_framebuffer.*,
+    width:       32*8,
+    height:      30*8,
+  };
+}
+
+fn get_nametable_3_framebuffer(ppu: *PPU): Image {
+  return Image{
+    framebuffer: ppu.debug.nametable_3_framebuffer.*,
+    width:       32*8,
+    height:      30*8,
+  };
+}
+
+fn get_nametable_4_framebuffer(ppu: *PPU): Image {
+  return Image{
+    framebuffer: ppu.debug.nametable_4_framebuffer.*,
     width:       32*8,
     height:      30*8,
   };

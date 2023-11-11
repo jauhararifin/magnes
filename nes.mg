@@ -83,6 +83,26 @@ fn get_screen_framebuffer(): ppu::Image {
   return ppu::get_screen_framebuffer(bus::the_ppu);
 }
 
+@wasm_export("getNametable1Framebuffer")
+fn get_nametable_1_framebuffer(): ppu::Image {
+  return ppu::get_nametable_1_framebuffer(bus::the_ppu);
+}
+
+@wasm_export("getNametable2Framebuffer")
+fn get_nametable_2_framebuffer(): ppu::Image {
+  return ppu::get_nametable_2_framebuffer(bus::the_ppu);
+}
+
+@wasm_export("getNametable3Framebuffer")
+fn get_nametable_3_framebuffer(): ppu::Image {
+  return ppu::get_nametable_3_framebuffer(bus::the_ppu);
+}
+
+@wasm_export("getNametable4Framebuffer")
+fn get_nametable_4_framebuffer(): ppu::Image {
+  return ppu::get_nametable_4_framebuffer(bus::the_ppu);
+}
+
 @wasm_export("keydownJoypad1A")
 fn keydown_joypad1_a() { joypad::press(bus::joypad_1, joypad::JOYPAD_BUTTON_A); }
 

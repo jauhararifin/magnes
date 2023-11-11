@@ -14,6 +14,26 @@ window.onload = async function() {
   paletteCanvasCtx.mozImageSmoothingEnabled = false
   paletteCanvasCtx.imageSmoothingEnabled = false
 
+  nametable1Ctx = nametable1.getContext('2d')
+  nametable1Ctx.webkitImageSmoothingEnabled = false
+  nametable1Ctx.mozImageSmoothingEnabled = false
+  nametable1Ctx.imageSmoothingEnabled = false
+
+  nametable2Ctx = nametable2.getContext('2d')
+  nametable2Ctx.webkitImageSmoothingEnabled = false
+  nametable2Ctx.mozImageSmoothingEnabled = false
+  nametable2Ctx.imageSmoothingEnabled = false
+
+  nametable3Ctx = nametable3.getContext('2d')
+  nametable3Ctx.webkitImageSmoothingEnabled = false
+  nametable3Ctx.mozImageSmoothingEnabled = false
+  nametable3Ctx.imageSmoothingEnabled = false
+
+  nametable4Ctx = nametable4.getContext('2d')
+  nametable4Ctx.webkitImageSmoothingEnabled = false
+  nametable4Ctx.mozImageSmoothingEnabled = false
+  nametable4Ctx.imageSmoothingEnabled = false
+
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data
 
@@ -62,6 +82,7 @@ window.onload = async function() {
     getDebugPaletteImage,
     setDebugPaletteId,
     getScreenFramebuffer,
+    getNametable1Framebuffer, getNametable2Framebuffer, getNametable3Framebuffer, getNametable4Framebuffer,
     keydownJoypad1A, keydownJoypad1B, keydownJoypad1Select, keydownJoypad1Start, keydownJoypad1Up, keydownJoypad1Down, keydownJoypad1Left, keydownJoypad1Right,
     keyupJoypad1A, keyupJoypad1B, keyupJoypad1Select, keyupJoypad1Start, keyupJoypad1Up, keyupJoypad1Down, keyupJoypad1Left, keyupJoypad1Right,
   } = module.instance.exports;
@@ -89,6 +110,10 @@ window.onload = async function() {
       keyupJoypad1Start();
     else if (key === 'control')
       keyupJoypad1Select();
+    else
+      return
+
+    event.preventDefault()
   });
 
   document.addEventListener('keydown', (event) => {
@@ -109,6 +134,10 @@ window.onload = async function() {
       keydownJoypad1Start();
     else if (key === 'control')
       keydownJoypad1Select();
+    else
+      return
+
+    event.preventDefault()
   });
 
   function getString(offset) {
@@ -169,6 +198,18 @@ window.onload = async function() {
 
       const screen = getScreenFramebuffer();
       renderToCanvas(canvas, ctx, screen)
+
+      const nametable1Image = getNametable1Framebuffer()
+      renderToCanvas(nametable1, nametable1Ctx, nametable1Image)
+
+      const nametable2Image = getNametable2Framebuffer()
+      renderToCanvas(nametable2, nametable2Ctx, nametable2Image)
+
+      const nametable3Image = getNametable3Framebuffer()
+      renderToCanvas(nametable3, nametable3Ctx, nametable3Image)
+
+      const nametable4Image = getNametable4Framebuffer()
+      renderToCanvas(nametable4, nametable4Ctx, nametable4Image)
     }
 
     requestAnimationFrame(frame)
