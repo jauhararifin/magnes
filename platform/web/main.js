@@ -34,17 +34,9 @@ window.onload = async function() {
   nametable4Ctx.mozImageSmoothingEnabled = false
   nametable4Ctx.imageSmoothingEnabled = false
 
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data
-
-  for (let i = 0; i < data.length; i += 4) {
-    data[i+0] = 0
-    data[i+1] = 0
-    data[i+2] = 0
-    data[i+3] = 255
-  }
-
-  ctx.putImageData(imageData, 0, 0)
+  preselectedRom.addEventListener('change', function(e) {
+    romInput.disabled = e.target.value !== 'select-file'
+  })
 
   const resp = await fetch('/nes.wasm')
   const bytes = await resp.arrayBuffer()
@@ -218,12 +210,7 @@ window.onload = async function() {
 
   playButton.onclick = function() {
     document.activeElement.blur()
-    if (romInput.files.length === 0) {
-      alert("Missing ROM file");
-      return
-    }
 
-    const file = romInput.files[0];
     const reader = new FileReader();
     reader.onload = function(e) {
       const arrayBuffer = e.target.result;
@@ -247,7 +234,19 @@ window.onload = async function() {
         lastExecuted = performance.now();
       }
     }
-    reader.readAsArrayBuffer(file);
+
+    if (preselectedRom.value === 'select-file') {
+      if (romInput.files.length === 0) {
+        alert("Missing ROM file");
+        return
+      }
+      const file = romInput.files[0];
+      reader.readAsArrayBuffer(file);
+    } else {
+      fetch(preselectedRom.value).then(res => res.blob()).then(blob => {
+      reader.readAsArrayBuffer(blob);
+      })
+    }
   }
 
 };
