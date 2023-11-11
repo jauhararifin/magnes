@@ -43,7 +43,12 @@
       <div style="border-top: solid 1px black; height: 0; margin: 10px 0; padding: 0;">&nbsp;</div>
       <div style="display: flex;align-items: flex-start;justify-content: space-around; gap: 5px">
         <div style="display: flex; flex-direction: column; width: 800px; margin: 0 auto; gap: 5px;">
-          <div style="display: flex;">
+          <div style="display: flex; gap: 5px;">
+            <select id="preselectedRom" style="max-width: 80px;">
+              <option value="/roms/croom.nes">Concentration Room</option>
+              <option value="/roms/flappybird.nes">Flappy Bird</option>
+              <option value="/roms/nestest.nes">Nestest</option>
+            </select>
             <input style="flex: 1" type="file" id="romInput" name="myFile">
             <button style="flex: 0" id="playButton">Play</button>
           </div>

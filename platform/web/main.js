@@ -217,6 +217,7 @@ window.onload = async function() {
   requestAnimationFrame(frame)
 
   playButton.onclick = function() {
+    document.activeElement.blur()
     if (romInput.files.length === 0) {
       alert("Missing ROM file");
       return
