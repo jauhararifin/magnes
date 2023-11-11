@@ -36,6 +36,12 @@ fn load(raw_bytes: [*]u8): ROM {
 
   let mapper = (raw_bytes[7].* & 0xf0) | (raw_bytes[6].* >> 4);
 
+  if debug {
+    fmt::print_str("program mapper = ");
+    fmt::print_u8(mapper);
+    fmt::print_str("\n");
+  }
+
   let ines_ver = (raw_bytes[7].* >> 2) & 0b11;
   if ines_ver != 0 {
     return ROM{valid: false, error: "NES2.0 format is not supported"};

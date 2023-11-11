@@ -14,10 +14,10 @@ fn tick(elapsed: i64) {
   remaining_elapsed_nanosecond = remaining_elapsed_nanosecond + elapsed;
   let cpu_cycle = remaining_elapsed_nanosecond / cycle_period;
   cpu::tick(bus::the_cpu, cpu_cycle);
-  remaining_elapsed_nanosecond = remaining_elapsed_nanosecond % cycle_period;
-
   let ppu_cycle = cpu_cycle * 3;
   ppu::tick(bus::the_ppu, ppu_cycle);
+
+  remaining_elapsed_nanosecond = remaining_elapsed_nanosecond % cycle_period;
 }
 
 let rom_buffer: [*]u8 = mem::alloc_array::<u8>(0x10000);

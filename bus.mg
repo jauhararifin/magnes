@@ -35,15 +35,6 @@ fn read(addr: u16): u8 {
     fmt::print_str(" = ");
   }
 
-  if addr == 0x00fe {
-    let r = next_random_u8() & 0xff;
-    if debug {
-      fmt::print_u8(r);
-      fmt::print_str("\n");
-    }
-    return r;
-  }
-
   if (addr >= 0) && (addr < 0x2000) {
     if debug {
       fmt::print_u8(ram[addr & 0x07ff].*);
@@ -131,12 +122,4 @@ fn write(addr: u16, data: u8) {
       fmt::print_str("\n");
     }
   }
-}
-
-let a: u8 = 0x13;
-let c: u8 = 0x0a;
-let x: u8 = 0xfe;
-fn next_random_u8(): u8 {
-  x = a * x + c;
-  return x;
 }
