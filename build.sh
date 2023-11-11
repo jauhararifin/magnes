@@ -9,3 +9,7 @@ rm -rf build/platform/web/*
 cp ./platform/web/index.html ./build/platform/web/index.html
 cp ./platform/web/main.js ./build/platform/web/main.js
 cp ./build/nes.wasm ./build/platform/web/nes.wasm
+
+mkdir -p build/platform/web/roms
+rm -rf build/platform/web/roms/*
+cp -r ./roms/* ./build/platform/web/roms/
