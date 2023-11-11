@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+  <head>
+      <title>Magnes - Magelang NES Emulator</title>
+      <meta charset="utf-8" />
+      <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <META HTTP-EQUIV="CACHE-CONTROL" CONTENT="NO-CACHE">
+      <META HTTP-EQUIV="EXPIRES" CONTENT="Mon, 22 Jul 2002 11:12:01 GMT">
+      <style>
+        .pixelate {
+          image-rendering: auto;
+          image-rendering: crisp-edges;
+          image-rendering: pixelated;
+          image-rendering: optimizeSpeed;
+          image-rendering: pixelated;
+          image-rendering: -moz-crisp-edges;
+          image-rendering: -o-crisp-edges;
+          image-rendering: crisp-edges;
+          -ms-interpolation-mode: nearest-neighbor;
+
+          border: solid 1px black;
+        }
+        p {
+          margin: 10px;
+        }
+        #charTileCanvas {
+          width: 512px;
+          height: 256px;
+        }
+        canvas {
+          background-color: black;
+        }
+      </style>
+  </head>
+  <body>
+    <div style="display: flex; flex-direction: column; width: 1024px; margin: 0 auto;">
+      <div style="display: flex; align-items: baseline; gap: 5px;">
+        <h2 style="margin: 0; padding: 0;">Magnes</h2>
+        <div style="margin: 0, padding: 0; border-left: solid 1px black">&nbsp;</div>
+        <h3 style="margin: 0; font-weight: 400;">NES (Nintendo Entertaiment System) Emulator written In <a href="https://github.com/jauhararifin/magelang">Magelang</a></h3>
+      </div>
+      <div style="border-top: solid 1px black; height: 0; margin: 10px 0; padding: 0;">&nbsp;</div>
+      <div style="display: flex;align-items: flex-start;justify-content: space-around; gap: 5px">
+        <div style="display: flex; flex-direction: column; width: 800px; margin: 0 auto; gap: 5px;">
+          <div style="display: flex; gap: 5px;">
+            <select id="preselectedRom" style="max-width: 80px;">
+              <option value="select-file">Select from file</option>
+              <option value="/roms/croom.nes">Concentration Room</option>
+              <option value="/roms/flappybird.nes">Flappy Bird</option>
+              <option value="/roms/nestest.nes">Nestest</option>
+            </select>
+            <input style="flex: 1" type="file" id="romInput" name="myFile">
+            <button style="flex: 0" id="playButton">Play</button>
+          </div>
+          <canvas id="canvas" class="pixelate" width=32 height=30 style="width: 512px; height: 480px"></canvas>
+          <div>
+            <h4 style="margin: 10px 0">Controls</h4>
+            <table style="width: 100%;table-layout: fixed; text-align: center;" border=1 frame=hsides rules=rows>
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Joypad 1</th>
+                  <th>Joypad 2</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Left</td>
+                  <td>Left</td>
+                  <td>Not Supported Yet</td>
+                </tr>
+                <tr>
+                  <td>Right</td>
+                  <td>Right</td>
+                  <td>Not Supported Yet</td>
+                </tr>
+                <tr>
+                  <td>Up</td>
+                  <td>Up</td>
+                  <td>Not Supported Yet</td>
+                </tr>
+                <tr>
+                  <td>Down</td>
+                  <td>Down</td>
+                  <td>Not Supported Yet</td>
+                </tr>
+                <tr>
+                  <td>Start</td>
+                  <td>Enter</td>
+                  <td>Not Supported Yet</td>
+                </tr>
+                <tr>
+                  <td>Select</td>
+                  <td>Ctrl</td>
+                  <td>Not Supported Yet</td>
+                </tr>
+                <tr>
+                  <td>A</td>
+                  <td>X</td>
+                  <td>Not Supported Yet</td>
+                </tr>
+                <tr>
+                  <td>B</td>
+                  <td>Z</td>
+                  <td>Not Supported Yet</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <div style="display: flex; gap: 5px;">
+            <button style="flex: 1;" onClick="setPalette(0);">0</button>
+            <button style="flex: 1;" onClick="setPalette(1);">1</button>
+            <button style="flex: 1;" onClick="setPalette(2);">2</button>
+            <button style="flex: 1;" onClick="setPalette(3);">3</button>
+            <button style="flex: 1;" onClick="setPalette(4);">4</button>
+            <button style="flex: 1;" onClick="setPalette(5);">5</button>
+            <button style="flex: 1;" onClick="setPalette(6);">6</button>
+            <button style="flex: 1;" onClick="setPalette(7);">7</button>
+          </div>
+          <canvas id="paletteCanvas" class="pixelate" width=33 height=1 style="width: 100%; height: 20px;"></canvas>
+          <canvas id="charTileCanvas" class="pixelate" width=256 height=128></canvas>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="display: flex; gap: 2px;">
+              <canvas id="nametable1" class="pixelate" width=256 height=240 style="height: 238px;"></canvas>
+              <canvas id="nametable2" class="pixelate" width=256 height=240 style="height: 238px;"></canvas>
+            </div>
+            <div style="display: flex; gap: 2px;">
+              <canvas id="nametable3" class="pixelate" width=256 height=240 style="height: 238px;"></canvas>
+              <canvas id="nametable4" class="pixelate" width=256 height=240 style="height: 238px;"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="border-top: solid 1px black; height: 0; margin: 10px 0; padding: 0;">&nbsp;</div>
+      <div style="padding: 5px 0;">
+        Magnes, NES Emulator written by <a href="https://github.com/jauhararifin">Jauhar Arifin</a>. Source code available on <a href="https://github.com/jauhararifin/magnes">Github</a>.
+      </div>
+    </div>
+
+    <script src="/main.js"></script>
+  </body>
+</html>
+
+
