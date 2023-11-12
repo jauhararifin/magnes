@@ -1378,11 +1378,11 @@ fn handle_instr_arr(cpu: *CPU, mode: u8, addr: u16): i32 {
     cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_CARRY;
   }
 
-  data = data >> 1;
+  let tmp = cpu.reg.a.* >> 1;
   if old_carry {
-    data = data | 0b1000_0000;
+    tmp = tmp | 0b1000_0000;
   }
-  set_reg_a(cpu, data);
+  set_reg_a(cpu, tmp);
 
   let result = cpu.reg.a.*;
   let bit_5 = (result >> 5) & 1;
