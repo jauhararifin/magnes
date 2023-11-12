@@ -219,8 +219,7 @@ fn tick(ppu: *PPU, cycles: i64) {
     }
   }
 
-  // render_background(ppu);
-  render_background_2(ppu);
+  render_background(ppu);
   render_objects(ppu);
   update_debug_chr_tile(ppu);
 
@@ -258,7 +257,7 @@ fn set_register(ppu: *PPU, id: u8, data: u8) {
     if ppu.scroll_latch.* {
       ppu.scroll_y.* = data;
     } else {
-      ppu.scroll_y.* = data;
+      ppu.scroll_x.* = data;
     }
     ppu.scroll_latch.* = !ppu.scroll_latch.*;
   } else if id == 6 {
@@ -666,79 +665,8 @@ fn get_debug_palette_framebuffer(ppu: *PPU): DebugPalette {
 }
 
 fn render_background(ppu: *PPU) {
-  let nametable: u8 = (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_1) | (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_2);
-  let nametable: u16 = nametable as u16;
-  let vram_addr = nametable * 0x400;
-
-  let pattern_addr: u16 = 0;
-  if (ppu.reg.control.* & CONTROL_FLAG_BACKGROUND_PATTERN_ADDR) != 0 {
-    pattern_addr = 0x1000;
-  }
-
-  let yi = 0;
-  while yi < 30 {
-    let xi = 0;
-    while xi < 32 {
-      let vram_addr = mirror_vram(ppu.mirroring.*, vram_addr + (yi as u16) * 32 + (xi as u16));
-      let tile_id = ppu.vram.*[vram_addr].* as u16;
-      let p = ppu.characters.*[pattern_addr + tile_id * 16] as [*]u8;
-
-      let attribute_byte_offset = (yi / 4) * 8 + (xi / 4);
-      let attribute_byte = ppu.vram.*[32 * 30 + attribute_byte_offset].*;
-      let attr_y = (yi % 4) / 2;
-      let attr_x = (xi % 4) / 2;
-      let palette_id: u8 = 0;
-      if attr_y == 0 && attr_x == 0 {
-        palette_id = (attribute_byte >> 0) & 0b11;
-      } else if attr_y == 0 && attr_x == 1 {
-        palette_id = (attribute_byte >> 2) & 0b11;
-      } else if attr_y == 1 && attr_x == 0 {
-        palette_id = (attribute_byte >> 4) & 0b11;
-      } else if attr_y == 1 && attr_x == 1 {
-        palette_id = (attribute_byte >> 6) & 0b11;
-      }
-
-      let y = 0;
-      while y < 8 {
-        let hi = p[y].*;
-        let lo = p[y + 8].*;
-
-        let x: u8 = 0;
-        while x < 8 {
-          let msb: u8 = 0;
-          if (x == 7 && (lo & 1) != 0) || (lo & (0b1000_0000 >> x)) != 0 {
-            msb = 1;
-          }
-
-          let lsb: u8 = 0;
-          if (hi & (0b1000_0000 >> x)) != 0 {
-            lsb = 1;
-          }
-
-          let color_offset = (msb << 1) | lsb;
-
-          let screen_y = yi * 8 + y;
-          let screen_x = xi * 8 + x as isize;
-          let framebuffer_offset = screen_y * 32 * 8 + screen_x;
-          set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset], color_offset);
-
-          x = x + 1;
-        }
-
-        y = y + 1;
-      }
-
-      xi = xi + 1;
-    }
-    yi = yi + 1;
-  }
-}
-
-fn render_background_2(ppu: *PPU) {
   let scroll_x = (ppu.scroll_x.* as u32) as i32;
   let scroll_y = (ppu.scroll_y.* as u32) as i32;
-  // scroll_x = 0;
-  // scroll_y = 0;
 
   let name_a: u16 = 0;
   let name_b: u16 = 1;
@@ -746,7 +674,6 @@ fn render_background_2(ppu: *PPU) {
   let name_d: u16 = 3;
 
   let selected_nametable: u8 = (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_1) | (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_2);
-  // let selected_nametable = 0;
   let selected_nametable: u16 = selected_nametable as u16;
 
   name_a = selected_nametable;

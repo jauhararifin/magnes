@@ -52,10 +52,19 @@ fn load(raw_bytes: [*]u8): ROM {
   let mirroring: u8;
   if four_screen {
     mirroring = MIRRORING_FOUR_SCREEN;
+    if debug {
+      fmt::print_str("mirroring=four screen\n");
+    }
   } else if vertical_mirroring {
     mirroring = MIRRORING_VERTICAL;
+    if debug {
+      fmt::print_str("mirroring=vertical\n");
+    }
   } else {
     mirroring = MIRRORING_HORIZONTAL;
+    if debug {
+      fmt::print_str("mirroring=horizontal\n");
+    }
   }
 
   let prg_rom_size = (raw_bytes[4].* as u16) * PRG_ROM_PAGE_SIZE;
