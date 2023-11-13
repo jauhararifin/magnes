@@ -20,7 +20,7 @@ fn tick(elapsed: i64) {
   remaining_elapsed_nanosecond = remaining_elapsed_nanosecond % cycle_period;
 }
 
-let rom_buffer: [*]u8 = mem::alloc_array::<u8>(0x10000);
+let rom_buffer: [*]u8 = mem::alloc_array::<u8>(0x100000);
 @wasm_export("getRom")
 fn get_rom(): [*]u8 {
   return rom_buffer;
@@ -53,6 +53,7 @@ fn get_ram(): [*]u8 {
 @wasm_export("reset")
 fn reset() {
   bus::reset();
+  rom::reset(bus::the_rom);
   cpu::reset(bus::the_cpu);
   ppu::reset(bus::the_ppu);
   joypad::reset(bus::joypad_1);

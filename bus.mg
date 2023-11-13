@@ -32,7 +32,7 @@ fn read(addr: u16): u8 {
   if debug {
     fmt::print_str("read ");
     fmt::print_u16(addr);
-    fmt::print_str(" = ");
+    fmt::print_str("\n");
   }
 
   if (addr >= 0) && (addr < 0x2000) {
@@ -60,16 +60,7 @@ fn read(addr: u16): u8 {
     return joypad::read(joypad_2);
   } else if addr >= 0x8000 {
     let addr = addr - 0x8000;
-    if (the_rom.program_size.* == 0x4000) && (addr >= 0x4000) {
-      addr = addr & 0x3fff;
-    }
-    if debug {
-      fmt::print_u8(the_rom.program.*[addr].*);
-      fmt::print_str(" (from rom at ");
-      fmt::print_u16(addr);
-      fmt::print_str(")\n");
-    }
-    return the_rom.program.*[addr].*;
+    return rom::read_program(the_rom, addr);
   }
 
   if debug {
@@ -113,6 +104,9 @@ fn write(addr: u16, data: u8) {
     joypad::write(joypad_1, data);
   } else if addr == 0x4017 {
     joypad::write(joypad_2, data);
+  } else if addr >= 0x8000 {
+    let addr = addr - 0x8000;
+    return rom::write_program(the_rom, addr, data);
   } else {
     if debug {
       fmt::print_str("invalid write ");

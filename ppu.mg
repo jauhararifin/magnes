@@ -64,8 +64,6 @@ let MASK_FLAG_EMPHASIZE_GREEN: u8     = 1<<6;
 let MASK_FLAG_EMPHASIZE_BLUE: u8      = 1<<7;
 
 struct PPU {
-  characters:      [*]u8,
-  characters_size: u16,
   // maybe instead of storing the color id like this, 
   // we can store the actual color directly.
   palette:         [*]u8,
@@ -135,19 +133,12 @@ fn new(): *PPU {
   p.oam.*                           = mem::alloc_array::<u8>(64 * 4);
   p.oam_addr.*                      = 0;
   p.screen_framebuffer.*            = mem::alloc_array::<Color>(256 * 256); // technically only 256 x 240 is used
-  p.characters.*                    = mem::alloc_array::<u8>(0x2000); // 8KB
 
   reset(p);
   return p;
 }
 
 fn load_rom(ppu: *PPU, cart: *rom::ROM) {
-  let i: u16 = 0;
-  while i < cart.characters_size.* {
-    ppu.characters.*[i].* = cart.characters.*[i].*;
-    i = i + 1;
-  }
-  ppu.characters_size.* = cart.characters_size.*;
   ppu.mirroring.* = cart.mirroring.*;
 
   update_debug_chr_tile(ppu);
@@ -322,9 +313,13 @@ fn read_data(ppu: *PPU): u8 {
   let addr = get_addr(ppu);
   inc_addr(ppu);
 
+  if addr >= 0x3000 && addr < 0x3f00 {
+    addr = addr - 0x2000;
+  }
+
   if addr < 0x2000 {
     let data = ppu.data.*;
-    ppu.data.* = ppu.characters.*[addr].*;
+    ppu.data.* = rom::read_chr(bus::the_rom, addr);
     return data;
   } else if addr < 0x3000 {
     let data = ppu.data.*;
@@ -332,15 +327,18 @@ fn read_data(ppu: *PPU): u8 {
     ppu.data.* = ppu.vram.*[addr].*;
     return data;
   } else if addr < 0x3f00 {
-    fmt::print_str("addr 0x3000 - 0x3f00 shouldn't be used\n")
+    fmt::print_str("should be impossible")
     wasm::trap();
   } else if addr < 0x4000 {
     // addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
     // source: https://www.nesdev.org/wiki/PPU_palettes
+    if addr >= 0x3f20 {
+      addr = (addr - 0x3f00) % 0x20 + 0x3f00;
+    }
     if addr == 0x3f10 || addr == 0x3f14 || addr == 0x3f18 || addr == 0x3f1c {
       addr = addr - 0x10;
     }
-    return ppu.palette.*[addr-0x3fff].*;
+    return ppu.palette.*[addr-0x3f00].*;
   } else {
     fmt::print_str("reading addr above 3f00\n")
     wasm::trap();
@@ -393,20 +391,34 @@ fn write_data(ppu: *PPU, data: u8) {
   // fmt::print_str("\n");
   inc_addr(ppu);
 
+  if addr >= 0x3000 && addr < 0x3f00 {
+    addr = addr - 0x2000;
+  }
+
   if addr < 0x2000 {
-    ppu.characters.*[addr].* = data;
+    rom::write_chr(bus::the_rom, addr, data);
   } else if addr < 0x3000 {
     let addr = mirror_vram(ppu.mirroring.*, addr - 0x2000);
     ppu.vram.*[addr].* = data;
   } else if addr < 0x3f00 {
-    fmt::print_str("reading addr 0x3000 - 0x3f00\n")
+    fmt::print_str("should be impossible\n");
     wasm::trap();
   } else if addr < 0x4000 {
+    // fmt::print_str("write to palettte addr=");
+    // fmt::print_u16(addr);
+    // fmt::print_str(",data=");
+    // fmt::print_u8(data);
+    // fmt::print_str("\n");
+
     // addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
     // source: https://www.nesdev.org/wiki/PPU_palettes
+    if addr >= 0x3f20 {
+      addr = (addr - 0x3f00) % 0x20 + 0x3f00;
+    }
     if addr == 0x3f10 || addr == 0x3f14 || addr == 0x3f18 || addr == 0x3f1c {
       addr = addr - 0x10;
     }
+
     ppu.palette.*[addr-0x3f00].* = data;
     let color = get_color(data);
     ppu.debug.palette_framebuffer.*[addr-0x3f00].* = color;
@@ -538,18 +550,18 @@ fn get_debug_tile_framebuffer(ppu: *PPU): Image {
 }
 
 fn update_debug_chr_tile(ppu: *PPU) {
-  let yi = 0;
+  let yi: u16 = 0;
   while yi < 16 {
-    let bank = 0;
+    let bank: u16 = 0;
     while bank < 2 {
-      let xi = 0;
+      let xi: u16 = 0;
       while xi < 16 {
-        let p = ppu.characters.*[yi*16*16 + xi*16 + bank * 0x1000] as [*]u8;
+        let chr_offset: u16 = yi*16*16 + xi*16 + bank * 0x1000;
 
-        let y = 0;
+        let y: u16 = 0;
         while y < 8 {
-          let hi = p[y].*;
-          let lo = p[y + 8].*;
+          let hi = rom::read_chr(bus::the_rom, chr_offset + y);
+          let lo = rom::read_chr(bus::the_rom, chr_offset + y + 8);
 
           let x7 = ((lo & 0b0000_0001) << 1) |  (hi & 0b0000_0001);
           let x6 =  (lo & 0b0000_0010)       | ((hi & 0b0000_0010) >> 1);
@@ -748,9 +760,9 @@ fn render_background(ppu: *PPU) {
       }
 
       let tile_id = nametable[tile_id].*;
-      let p = ppu.characters.*[pattern_addr + tile_id as u16 * 16] as [*]u8;
-      let hi = p[tile_y].*;
-      let lo = p[tile_y + 8].*;
+      let chr_offset = pattern_addr + tile_id as u16 * 16;
+      let hi = rom::read_chr(bus::the_rom, chr_offset + tile_y as u16);
+      let lo = rom::read_chr(bus::the_rom, chr_offset + tile_y as u16 + 8);
       let msb: u8 = 0;
       if (tile_x == 7 && (lo & 1) != 0) || (lo & (0b1000_0000 >> tile_x)) != 0 {
         msb = 1;
@@ -797,13 +809,13 @@ fn render_nametable(ppu: *PPU, nametable: u8, framebuffer: [*]Color) {
     pattern_addr = 0x1000;
   }
 
-  let yi = 0;
+  let yi: u16 = 0;
   while yi < 30 {
-    let xi = 0;
+    let xi: u16 = 0;
     while xi < 32 {
       let vram_addr = nametable + (yi as u16) * 32 + (xi as u16);
       let tile_id = ppu.vram.*[vram_addr].* as u16;
-      let p = ppu.characters.*[pattern_addr + tile_id * 16] as [*]u8;
+      let chr_offset = pattern_addr + tile_id * 16;
 
       let attribute_byte_offset = (yi / 4) * 8 + (xi / 4);
       let attribute_byte = ppu.vram.*[nametable + 32 * 30 + attribute_byte_offset as u16].*;
@@ -820,10 +832,10 @@ fn render_nametable(ppu: *PPU, nametable: u8, framebuffer: [*]Color) {
         palette_id = (attribute_byte >> 6) & 0b11;
       }
 
-      let y = 0;
+      let y: u16 = 0;
       while y < 8 {
-        let hi = p[y].*;
-        let lo = p[y + 8].*;
+        let hi = rom::read_chr(bus::the_rom, chr_offset + y);
+        let lo = rom::read_chr(bus::the_rom, chr_offset + y + 8);
 
         let x: u8 = 0;
         while x < 8 {
@@ -839,8 +851,8 @@ fn render_nametable(ppu: *PPU, nametable: u8, framebuffer: [*]Color) {
 
           let color_offset = (msb << 1) | lsb;
 
-          let screen_y = yi * 8 + y;
-          let screen_x = xi * 8 + x as isize;
+          let screen_y = yi as isize * 8 + y as isize;
+          let screen_x = xi as isize * 8 + x as isize;
           let framebuffer_offset = screen_y * 32 * 8 + screen_x;
           set_background_color(ppu, palette_id, framebuffer[framebuffer_offset], color_offset);
 
@@ -900,6 +912,11 @@ fn render_objects(ppu: *PPU) {
     let x = byte3;
     let tile_id = byte1 as u16;
 
+    if y >= 0xef {
+      i = i + 4;
+      continue;
+    }
+
     let pattern_addr: u16 = 0;
     if (ppu.reg.control.* & CONTROL_FLAG_SPRITE_PATTERN_ADDR) != 0 {
       pattern_addr = 0x1000;
@@ -910,12 +927,12 @@ fn render_objects(ppu: *PPU) {
     let flip_vertical = (byte2 & 0b1000_0000) != 0;
     let flip_horizontal = (byte2 & 0b0100_0000) != 0;
 
-    let p = ppu.characters.*[pattern_addr + tile_id * 16] as [*]u8;
+    let chr_offset = pattern_addr + tile_id * 16;
 
     let y_offset: u16 = 0;
     while y_offset < 8 {
-      let hi = p[y_offset].*;
-      let lo = p[y_offset + 8].*;
+      let hi = rom::read_chr(bus::the_rom, chr_offset + y_offset);
+      let lo = rom::read_chr(bus::the_rom, chr_offset + y_offset + 8);
 
       let x7 = ((lo & 0b0000_0001) << 1) |  (hi & 0b0000_0001);
       let x6 =  (lo & 0b0000_0010)       | ((hi & 0b0000_0010) >> 1);
