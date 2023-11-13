@@ -489,13 +489,6 @@ fn execute_next_instruction(cpu: *CPU): i32 {
   let addr_mode = ins.addr_mode.*;
   cpu.last_ins.* = ins.desc.*;
 
-  if ins.code.* == 0 {
-    fmt::print_str("found undefined instruction ");
-    fmt::print_u8(opcode);
-    fmt::print_str("\n");
-    wasm::trap();
-  }
-
   let addr: u16;
 
   if addr_mode == ADDR_MODE_IMP {
@@ -816,8 +809,16 @@ fn handle_instr_bpl(cpu: *CPU, mode: u8, addr: u16): i32 {
 }
 
 fn handle_instr_brk(cpu: *CPU, mode: u8, addr: u16): i32 {
-  // TODO: maybe should turn off the emulation?
-  wasm::trap();
+  stack_push_u16(cpu, cpu.reg.pc.* + 1);
+
+  let status = cpu.reg.status.*;
+  status = status | FLAG_MASK_1;
+  status = status | FLAG_MASK_BREAK;
+  stack_push(cpu, status);
+  cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_INTERRUPT_DISABLE;
+
+  cpu.reg.pc.* = mem_read_u16(0xfffe);
+
   return 0;
 }
 
@@ -1404,10 +1405,12 @@ fn handle_instr_arr(cpu: *CPU, mode: u8, addr: u16): i32 {
 }
 
 fn handle_instr_ane(cpu: *CPU, mode: u8, addr: u16): i32 {
+  wasm::trap();
   return 0;
 }
 
 fn handle_instr_tas(cpu: *CPU, mode: u8, addr: u16): i32 {
+  wasm::trap();
   return 0;
 }
 
@@ -1418,10 +1421,13 @@ fn handle_instr_shy(cpu: *CPU, mode: u8, addr: u16): i32 {
 }
 
 fn handle_instr_shx(cpu: *CPU, mode: u8, addr: u16): i32 {
+  let result = cpu.reg.x.* & ((addr >> 8) as u8 + 1);
+  bus::write(addr, result);
   return 0;
 }
 
 fn handle_instr_sha(cpu: *CPU, mode: u8, addr: u16): i32 {
+  wasm::trap();
   return 0;
 }
 
@@ -1436,6 +1442,7 @@ fn handle_instr_lxa(cpu: *CPU, mode: u8, addr: u16): i32 {
 }
 
 fn handle_instr_las(cpu: *CPU, mode: u8, addr: u16): i32 {
+  wasm::trap();
   return 0;
 }
 
