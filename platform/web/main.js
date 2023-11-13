@@ -174,12 +174,19 @@ window.onload = async function() {
   }
 
   let playing = false
+  let crashed = false
   let lastExecuted = Math.round(performance.now() * 1_000_000)
   function frame() {
-    if (playing) {
+    if (playing && !crashed) {
       const currentTime = Math.round(performance.now() * 1_000_000)
       const elapsed = currentTime - lastExecuted
-      tick(BigInt(Math.round(elapsed)))
+      try {
+        tick(BigInt(Math.round(elapsed)))
+      } catch (e) {
+        crashed = true;
+        alert("The emulator is crashing. The browser will be reloaded")
+        location.reload(true)
+      }
       lastExecuted = currentTime
 
       const debugTile = getDebugTileFramebufer()
@@ -216,6 +223,7 @@ window.onload = async function() {
       const arrayBuffer = e.target.result;
       const byteArray = new Uint8Array(arrayBuffer);
       if (byteArray.length > 1073741824) {
+        playing = false
         alert("ROM is too big")
         return
       }
@@ -226,12 +234,13 @@ window.onload = async function() {
 
       const [resultIsValid, resultError] = loadRom();
       if (!resultIsValid) {
+        playing = false
         const message = getString(resultError);
         alert(message);
       } else {
         reset();
+        lastExecuted = performance.now() * 1_000_000;
         playing = true;
-        lastExecuted = performance.now();
       }
     }
 
