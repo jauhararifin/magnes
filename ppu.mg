@@ -155,6 +155,7 @@ fn reset(ppu: *PPU) {
   ppu.scroll_x.*      = 0;
   ppu.scroll_y.*      = 0;
   ppu.scroll_latch.*  = false;
+  ppu.cycles.*        = 0;
 
   // vram,palette,oam,screenframebuffer
   let i = 0;
@@ -192,7 +193,18 @@ fn tick(ppu: *PPU, cycles: i64) {
       ppu.cycles.* >= sprite0_x &&
       (ppu.reg.mask.* & MASK_FLAG_SPRITE) != 0;
     if is_zero_hit {
+      // fmt::print_str("zero hit on scanline=");
+      // fmt::print_i32(ppu.scanline.* as i32);
+      // fmt::print_str(",sprite0_x=");
+      // fmt::print_i32(sprite0_x);
+      // fmt::print_str(",sprite0_y=");
+      // fmt::print_i32(sprite0_y);
+      // fmt::print_str("\n");
       ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_ZERO_HIT;
+    }
+
+    if ppu.scanline.* < 240 {
+      render_background(ppu, ppu.scanline.*);
     }
 
     ppu.cycles.* = ppu.cycles.* - 341;
@@ -214,7 +226,6 @@ fn tick(ppu: *PPU, cycles: i64) {
 }
 
 fn render(ppu: *PPU) {
-  render_background(ppu);
   render_objects(ppu);
   update_debug_chr_tile(ppu);
 
@@ -680,7 +691,7 @@ fn get_debug_palette_framebuffer(ppu: *PPU): DebugPalette {
   };
 }
 
-fn render_background(ppu: *PPU) {
+fn render_background(ppu: *PPU, y: i32) {
   let scroll_x = (ppu.scroll_x.* as u32) as i32;
   let scroll_y = (ppu.scroll_y.* as u32) as i32;
 
@@ -717,80 +728,76 @@ fn render_background(ppu: *PPU) {
     pattern_addr = 0x1000;
   }
 
-  let y: i32 = 0;
-  while y < 240 {
-    let x: i32 = 0;
-    while x < 256 {
-      // region represent which nametable does pixel (x, y) fall into.
-      // 0 means: it falls into the main nametable.
-      // 1 means: it falls into the nametable in the right side of the main nametable.
-      // 2 means: it falls into the nametable in the bottom side of the main nametable.
-      // 3 means: it falls into the nametable in the bottom-right side of the main nametable.
-      // here is the illustration:
-      // [0][1]
-      // [2][3]
-      let region: u8 = 0;
-      if (scroll_x + x) >= 256 {
-        region = region + 1;
-      }
-      if (scroll_y + y) >= 240 {
-        region = region + 2;
-      }
-
-      let x_relative_to_nametable = (scroll_x + x) % 256;
-      let y_relative_to_nametable = (scroll_y + y) % 240;
-      let tile_id_x = x_relative_to_nametable / 8;
-      let tile_id_y = y_relative_to_nametable / 8;
-      let tile_id = tile_id_y * 32 + tile_id_x;
-      let tile_y = (y_relative_to_nametable % 8) as u8;
-      let tile_x = (x_relative_to_nametable % 8) as u8;
-
-      let vram_offset: u16 = 0;
-      if region == 0 {
-        vram_offset = name_a as u16 * 0x400;
-      } else if region == 1 {
-        vram_offset = name_b as u16 * 0x400;
-      } else if region == 2 {
-        vram_offset = name_c as u16 * 0x400;
-      } else {
-        vram_offset = name_d as u16 * 0x400;
-      }
-
-      let nametable = ppu.vram.*[mirror_vram(ppu.mirroring.*, vram_offset)] as [*]u8;
-      let attribute_byte_offset = (tile_id_y / 4) * 8 + (tile_id_x / 4);
-      let attribute_byte = nametable[32 * 30 + attribute_byte_offset as isize].*;
-      let attr_y = (tile_id_y % 4) / 2;
-      let attr_x = (tile_id_x % 4) / 2;
-      let palette_id: u8 = 0;
-      if attr_y == 0 && attr_x == 0 {
-        palette_id = (attribute_byte >> 0) & 0b11;
-      } else if attr_y == 0 && attr_x == 1 {
-        palette_id = (attribute_byte >> 2) & 0b11;
-      } else if attr_y == 1 && attr_x == 0 {
-        palette_id = (attribute_byte >> 4) & 0b11;
-      } else if attr_y == 1 && attr_x == 1 {
-        palette_id = (attribute_byte >> 6) & 0b11;
-      }
-
-      let tile_id = nametable[tile_id].*;
-      let chr_offset = pattern_addr + tile_id as u16 * 16;
-      let hi = rom::read_chr(bus::the_rom, chr_offset + tile_y as u16);
-      let lo = rom::read_chr(bus::the_rom, chr_offset + tile_y as u16 + 8);
-      let msb: u8 = 0;
-      if (tile_x == 7 && (lo & 1) != 0) || (lo & (0b1000_0000 >> tile_x)) != 0 {
-        msb = 1;
-      }
-      let lsb: u8 = 0;
-      if (hi & (0b1000_0000 >> tile_x)) != 0 {
-        lsb = 1;
-      }
-      let color_offset = (msb << 1) | lsb;
-
-      set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[y*256+x], color_offset);
-
-      x = x + 1;
+  let x: i32 = 0;
+  while x < 256 {
+    // region represent which nametable does pixel (x, y) fall into.
+    // 0 means: it falls into the main nametable.
+    // 1 means: it falls into the nametable in the right side of the main nametable.
+    // 2 means: it falls into the nametable in the bottom side of the main nametable.
+    // 3 means: it falls into the nametable in the bottom-right side of the main nametable.
+    // here is the illustration:
+    // [0][1]
+    // [2][3]
+    let region: u8 = 0;
+    if (scroll_x + x) >= 256 {
+      region = region + 1;
     }
-    y = y + 1;
+    if (scroll_y + y) >= 240 {
+      region = region + 2;
+    }
+
+    let x_relative_to_nametable = (scroll_x + x) % 256;
+    let y_relative_to_nametable = (scroll_y + y) % 240;
+    let tile_id_x = x_relative_to_nametable / 8;
+    let tile_id_y = y_relative_to_nametable / 8;
+    let tile_id = tile_id_y * 32 + tile_id_x;
+    let tile_y = (y_relative_to_nametable % 8) as u8;
+    let tile_x = (x_relative_to_nametable % 8) as u8;
+
+    let vram_offset: u16 = 0;
+    if region == 0 {
+      vram_offset = name_a as u16 * 0x400;
+    } else if region == 1 {
+      vram_offset = name_b as u16 * 0x400;
+    } else if region == 2 {
+      vram_offset = name_c as u16 * 0x400;
+    } else {
+      vram_offset = name_d as u16 * 0x400;
+    }
+
+    let nametable = ppu.vram.*[mirror_vram(ppu.mirroring.*, vram_offset)] as [*]u8;
+    let attribute_byte_offset = (tile_id_y / 4) * 8 + (tile_id_x / 4);
+    let attribute_byte = nametable[32 * 30 + attribute_byte_offset as isize].*;
+    let attr_y = (tile_id_y % 4) / 2;
+    let attr_x = (tile_id_x % 4) / 2;
+    let palette_id: u8 = 0;
+    if attr_y == 0 && attr_x == 0 {
+      palette_id = (attribute_byte >> 0) & 0b11;
+    } else if attr_y == 0 && attr_x == 1 {
+      palette_id = (attribute_byte >> 2) & 0b11;
+    } else if attr_y == 1 && attr_x == 0 {
+      palette_id = (attribute_byte >> 4) & 0b11;
+    } else if attr_y == 1 && attr_x == 1 {
+      palette_id = (attribute_byte >> 6) & 0b11;
+    }
+
+    let tile_id = nametable[tile_id].*;
+    let chr_offset = pattern_addr + tile_id as u16 * 16;
+    let hi = rom::read_chr(bus::the_rom, chr_offset + tile_y as u16);
+    let lo = rom::read_chr(bus::the_rom, chr_offset + tile_y as u16 + 8);
+    let msb: u8 = 0;
+    if (tile_x == 7 && (lo & 1) != 0) || (lo & (0b1000_0000 >> tile_x)) != 0 {
+      msb = 1;
+    }
+    let lsb: u8 = 0;
+    if (hi & (0b1000_0000 >> tile_x)) != 0 {
+      lsb = 1;
+    }
+    let color_offset = (msb << 1) | lsb;
+
+    set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[y*256+x], color_offset);
+
+    x = x + 1;
   }
 }
 
@@ -914,8 +921,8 @@ fn get_nametable_4_framebuffer(ppu: *PPU): Image {
 }
 
 fn render_objects(ppu: *PPU) {
-  let i = 0;
-  while i < 64 * 4 {
+  let i = 63 * 4;
+  while i >= 0 {
     let byte0 = ppu.oam.*[i+0].*;
     let byte1 = ppu.oam.*[i+1].*;
     let byte2 = ppu.oam.*[i+2].*;
@@ -926,7 +933,7 @@ fn render_objects(ppu: *PPU) {
     let tile_id = byte1 as u16;
 
     if y >= 0xef {
-      i = i + 4;
+      i = i - 4;
       continue;
     }
 
@@ -994,7 +1001,7 @@ fn render_objects(ppu: *PPU) {
       y_offset = y_offset + 1;
     }
 
-    i = i + 4;
+    i = i - 4;
   }
 }
 
