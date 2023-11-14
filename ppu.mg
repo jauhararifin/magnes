@@ -191,6 +191,9 @@ fn tick(ppu: *PPU, cycles: i64) {
     let is_zero_hit = sprite0_y == ppu.scanline.* &&
       ppu.cycles.* >= sprite0_x &&
       (ppu.reg.mask.* & MASK_FLAG_SPRITE) != 0;
+    if is_zero_hit {
+      ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_ZERO_HIT;
+    }
 
 
     ppu.cycles.* = ppu.cycles.* - 341;
@@ -686,6 +689,15 @@ fn render_background(ppu: *PPU) {
   let name_d: u16 = 3;
 
   let selected_nametable: u8 = (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_1) | (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_2);
+
+  // fmt::print_str("scroll_x=");
+  // fmt::print_i32(scroll_x);
+  // fmt::print_str(",scroll_y=");
+  // fmt::print_i32(scroll_y);
+  // fmt::print_str(",selected_nametable=");
+  // fmt::print_u8(selected_nametable);
+  // fmt::print_str("\n");
+
   let selected_nametable: u16 = selected_nametable as u16;
 
   name_a = selected_nametable;
@@ -916,6 +928,14 @@ fn render_objects(ppu: *PPU) {
       i = i + 4;
       continue;
     }
+
+    // fmt::print_str("render object x=");
+    // fmt::print_i32(x as i32);
+    // fmt::print_str(" y=");
+    // fmt::print_i32(y as i32);
+    // fmt::print_str(" tile_id=");
+    // fmt::print_u16(tile_id);
+    // fmt::print_str("\n");
 
     let pattern_addr: u16 = 0;
     if (ppu.reg.control.* & CONTROL_FLAG_SPRITE_PATTERN_ADDR) != 0 {

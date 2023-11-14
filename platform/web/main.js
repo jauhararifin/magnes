@@ -143,26 +143,6 @@ window.onload = async function() {
     return text
   }
 
-  function getCPU() {
-    const [a,x,y,sp,pc,status, lastOpcode, lastInsOffset, lastAddr, lastData, lastPc] = debugCPU()
-
-    const desc = getString(lastInsOffset)
-
-    return {
-      last: desc,
-      a: [a,a.toString(16)],
-      x: [x,x.toString(16)],
-      y: [y,y.toString(16)],
-      sp: [sp,sp.toString(16)],
-      pc: [pc,pc.toString(16)],
-      status: [status,status.toString(2)],
-      lastOpcode,
-      lastAddr: [lastAddr, lastAddr.toString(16)],
-      lastData: [lastData, lastData.toString(16)],
-      lastPc: [lastPc, lastPc.toString(16)],
-    }
-  }
-
   function renderToCanvas(theCanvas, ctx, image) {
     const [framebuffer, width, height] = image;
     const pixels = new Uint8ClampedArray(memoryBuffer, framebuffer, width*height*4);
