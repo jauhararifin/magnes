@@ -7,17 +7,26 @@ import fmt "fmt";
 import joypad "joypad";
 
 let remaining_elapsed_nanosecond: i64 = 0;
-let cycle_rate: i64 = 2_000_000; // cycles per second
+let cycle_rate: i64 = 1_789_773; // cycles per second
 let cycle_period: i64 = 1_000_000_000 / cycle_rate;
 @wasm_export("tick")
 fn tick(elapsed: i64) {
   remaining_elapsed_nanosecond = remaining_elapsed_nanosecond + elapsed;
+  if remaining_elapsed_nanosecond > 16_000_000 {
+    remaining_elapsed_nanosecond = 16_000_000;
+  }
+
   let cpu_cycle = remaining_elapsed_nanosecond / cycle_period;
-  cpu::tick(bus::the_cpu, cpu_cycle);
-  let ppu_cycle = cpu_cycle * 3;
-  ppu::tick(bus::the_ppu, ppu_cycle);
+
+  while cpu_cycle > 0 {
+    let cycle = cpu::tick2(bus::the_cpu) as i64;
+    ppu::tick(bus::the_ppu, cycle*3);
+    cpu_cycle = cpu_cycle - cycle;
+  }
 
   remaining_elapsed_nanosecond = remaining_elapsed_nanosecond % cycle_period;
+
+  ppu::render(bus::the_ppu);
 }
 
 let rom_buffer: [*]u8 = mem::alloc_array::<u8>(0x100000);

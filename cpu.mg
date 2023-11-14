@@ -456,17 +456,8 @@ fn non_maskable_interrupt(cpu: *CPU) {
   cpu.reg.pc.* = (hi << 8) | lo;
 }
 
-fn tick(cpu: *CPU, cycles: i64) {
-  let cycles = cycles as i32;
-  while cycles > 0 {
-    if cpu.remaining_cycle.* <= cycles {
-      cycles = cycles - cpu.remaining_cycle.*;
-      cpu.remaining_cycle.* = execute_next_instruction(cpu);
-    } else {
-      cpu.remaining_cycle.* = cpu.remaining_cycle.* - cycles;
-      cycles = 0;
-    }
-  }
+fn tick2(cpu: *CPU): i32 {
+  return execute_next_instruction(cpu);
 }
 
 let debug: bool = false;

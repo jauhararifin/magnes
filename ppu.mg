@@ -195,7 +195,6 @@ fn tick(ppu: *PPU, cycles: i64) {
       ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_ZERO_HIT;
     }
 
-
     ppu.cycles.* = ppu.cycles.* - 341;
     ppu.scanline.* = ppu.scanline.* + 1;
 
@@ -212,7 +211,9 @@ fn tick(ppu: *PPU, cycles: i64) {
       ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_VBLANK_STARTED;
     }
   }
+}
 
+fn render(ppu: *PPU) {
   render_background(ppu);
   render_objects(ppu);
   update_debug_chr_tile(ppu);
