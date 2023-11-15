@@ -43,12 +43,15 @@ fn write(joypad: *Joypad, data: u8) {
 
 fn read(joypad: *Joypad): u8 {
   if joypad.button_i.* > 7 {
-    return 1;
+    return 0x4; // I have no idea why returning 4 fix hanging menu on SMB.
   }
 
   let result = (joypad.status.* >> joypad.button_i.*) & 1;
   if !joypad.strobe.* && joypad.button_i.* <= 7 {
     joypad.button_i.* = joypad.button_i.* + 1;
+  }
+  if joypad.strobe.* {
+    joypad.button_i.* = 0;
   }
 
   // fmt::print_str("joypad read, result=");
