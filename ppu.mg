@@ -94,6 +94,7 @@ struct PPU {
   scroll_latch: bool,
 
   screen_framebuffer: [*]Color,
+  background_mask:    [*]u8,
 
   debug: Debug,
 
@@ -133,6 +134,7 @@ fn new(): *PPU {
   p.oam.*                           = mem::alloc_array::<u8>(64 * 4);
   p.oam_addr.*                      = 0;
   p.screen_framebuffer.*            = mem::alloc_array::<Color>(256 * 256); // technically only 256 x 240 is used
+  p.background_mask.*               = mem::alloc_array::<u8>(256 * 256); // technically only 256 x 240 is used
 
   reset(p);
   return p;
@@ -179,6 +181,7 @@ fn reset(ppu: *PPU) {
   let i = 0;
   while i < 256 * 240 {
     ppu.screen_framebuffer.*[i].* = Color{r:0,g:0,b:0,a:0};
+    ppu.background_mask.*[i].* = 0;
     i = i + 1;
   }
 }
@@ -187,24 +190,38 @@ fn tick(ppu: *PPU, cycles: i64) {
   ppu.cycles.* = ppu.cycles.* + cycles as i32;
 
   while ppu.cycles.* >= 341 {
-    let sprite0_y = ppu.oam.*[0].* as i32;
-    let sprite0_x = ppu.oam.*[3].* as i32;
-    let is_zero_hit = sprite0_y == ppu.scanline.* &&
-      ppu.cycles.* >= sprite0_x &&
-      (ppu.reg.mask.* & MASK_FLAG_SPRITE) != 0;
+    // fmt::print_str("scanline=");
+    // fmt::print_i32(ppu.scanline.*);
+    // fmt::print_str("scroll_x=");
+    // fmt::print_u8(ppu.scroll_x.*);
+    // fmt::print_str(",scroll_y=");
+    // fmt::print_u8(ppu.scroll_y.*);
+    // fmt::print_str(",selected_nametable=");
+    // let selected_nametable: u8 = (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_1) | (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_2);
+    // fmt::print_u8(selected_nametable);
+    // fmt::print_str("\n");
+
+    let is_zero_hit = false;
+    if ppu.scanline.* < 240 {
+      let hit = render_background(ppu, ppu.scanline.*);
+      if (ppu.reg.mask.* & MASK_FLAG_SPRITE) != 0 {
+        is_zero_hit = hit;
+      }
+    }
+
     if is_zero_hit {
       // fmt::print_str("zero hit on scanline=");
       // fmt::print_i32(ppu.scanline.* as i32);
+      // fmt::print_str(",scroll_x=");
+      // fmt::print_u8(ppu.scroll_x.*);
+      // fmt::print_str(",scroll_y=");
+      // fmt::print_u8(ppu.scroll_y.*);
       // fmt::print_str(",sprite0_x=");
-      // fmt::print_i32(sprite0_x);
+      // fmt::print_u8(ppu.oam.*[3].*);
       // fmt::print_str(",sprite0_y=");
-      // fmt::print_i32(sprite0_y);
+      // fmt::print_u8(ppu.oam.*[0].*);
       // fmt::print_str("\n");
       ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_ZERO_HIT;
-    }
-
-    if ppu.scanline.* < 240 {
-      render_background(ppu, ppu.scanline.*);
     }
 
     ppu.cycles.* = ppu.cycles.* - 341;
@@ -214,7 +231,7 @@ fn tick(ppu: *PPU, cycles: i64) {
       ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_VBLANK_STARTED;
       ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_ZERO_HIT;
       if (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0 {
-        cpu::non_maskable_interrupt(bus::the_cpu);
+        cpu::trigger_non_maskable_interrupt(bus::the_cpu);
       }
     }
     if ppu.scanline.* >= 262 {
@@ -248,7 +265,7 @@ fn set_register(ppu: *PPU, id: u8, data: u8) {
     let new_nmi_status = (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0;
     let status_vblank = (ppu.reg.status.* & STATUS_FLAG_VBLANK_STARTED) != 0;
     if !old_nmi_status && new_nmi_status && status_vblank {
-      cpu::non_maskable_interrupt(bus::the_cpu);
+      cpu::trigger_non_maskable_interrupt(bus::the_cpu);
     }
   } else if id == 1 {
     ppu.reg.mask.* = data;
@@ -691,7 +708,7 @@ fn get_debug_palette_framebuffer(ppu: *PPU): DebugPalette {
   };
 }
 
-fn render_background(ppu: *PPU, y: i32) {
+fn render_background(ppu: *PPU, y: i32): bool {
   let scroll_x = (ppu.scroll_x.* as u32) as i32;
   let scroll_y = (ppu.scroll_y.* as u32) as i32;
 
@@ -701,15 +718,6 @@ fn render_background(ppu: *PPU, y: i32) {
   let name_d: u16 = 3;
 
   let selected_nametable: u8 = (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_1) | (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_2);
-
-  // fmt::print_str("scroll_x=");
-  // fmt::print_i32(scroll_x);
-  // fmt::print_str(",scroll_y=");
-  // fmt::print_i32(scroll_y);
-  // fmt::print_str(",selected_nametable=");
-  // fmt::print_u8(selected_nametable);
-  // fmt::print_str("\n");
-
   let selected_nametable: u16 = selected_nametable as u16;
 
   name_a = selected_nametable;
@@ -727,6 +735,38 @@ fn render_background(ppu: *PPU, y: i32) {
   if (ppu.reg.control.* & CONTROL_FLAG_BACKGROUND_PATTERN_ADDR) != 0 {
     pattern_addr = 0x1000;
   }
+
+  let sprite0_x = ppu.oam.*[3].* as i32;
+  let sprite0_y = ppu.oam.*[0].* as i32 + 1;
+  let sprite0_tile_id = ppu.oam.*[1].* as u16;
+  let sprite0_y_offset = y - sprite0_y;
+  let sprite0_x_color: [*]u8 = mem::alloc_array::<u8>(8);
+  sprite0_x_color[0].* = 0;
+  sprite0_x_color[1].* = 0;
+  sprite0_x_color[2].* = 0;
+  sprite0_x_color[3].* = 0;
+  sprite0_x_color[4].* = 0;
+  sprite0_x_color[5].* = 0;
+  sprite0_x_color[6].* = 0;
+  sprite0_x_color[7].* = 0;
+  if sprite0_y < 0xef && sprite0_y_offset >= 0 && sprite0_y_offset < 8 {
+    let sprite_pattern_addr: u16 = 0;
+    if (ppu.reg.control.* & CONTROL_FLAG_SPRITE_PATTERN_ADDR) != 0 {
+      sprite_pattern_addr = 0x1000;
+    }
+    let sprite_chr_offset = sprite_pattern_addr + sprite0_tile_id * 16;
+    let sprite0_hi = rom::read_chr(bus::the_rom, sprite_chr_offset + sprite0_y_offset as u16);
+    let sprite0_lo = rom::read_chr(bus::the_rom, sprite_chr_offset + sprite0_y_offset as u16 + 8);
+    sprite0_x_color[7].* = ((sprite0_lo & 0b0000_0001) << 1) |  (sprite0_hi & 0b0000_0001);
+    sprite0_x_color[6].* =  (sprite0_lo & 0b0000_0010)       | ((sprite0_hi & 0b0000_0010) >> 1);
+    sprite0_x_color[5].* = ((sprite0_lo & 0b0000_0100) >> 1) | ((sprite0_hi & 0b0000_0100) >> 2);
+    sprite0_x_color[4].* = ((sprite0_lo & 0b0000_1000) >> 2) | ((sprite0_hi & 0b0000_1000) >> 3);
+    sprite0_x_color[3].* = ((sprite0_lo & 0b0001_0000) >> 3) | ((sprite0_hi & 0b0001_0000) >> 4);
+    sprite0_x_color[2].* = ((sprite0_lo & 0b0010_0000) >> 4) | ((sprite0_hi & 0b0010_0000) >> 5);
+    sprite0_x_color[1].* = ((sprite0_lo & 0b0100_0000) >> 5) | ((sprite0_hi & 0b0100_0000) >> 6);
+    sprite0_x_color[0].* = ((sprite0_lo & 0b1000_0000) >> 6) | ((sprite0_hi & 0b1000_0000) >> 7);
+  }
+  let touch_sprite_0 = false;
 
   let x: i32 = 0;
   while x < 256 {
@@ -795,10 +835,21 @@ fn render_background(ppu: *PPU, y: i32) {
     }
     let color_offset = (msb << 1) | lsb;
 
+    if (x - sprite0_x) >= 0 && (x - sprite0_x) < 8  {
+      let sprite_color = sprite0_x_color[x - sprite0_x].*;
+      if sprite_color != 0 {
+        touch_sprite_0 = true;
+      }
+    }
+
     set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[y*256+x], color_offset);
+    ppu.background_mask.*[y*256+x].* = color_offset;
 
     x = x + 1;
   }
+
+  mem::dealloc_array::<u8>(sprite0_x_color);
+  return touch_sprite_0;
 }
 
 fn set_background_color(ppu: *PPU, palette_id: u8, pixel: *Color, color_offset: u8) {
@@ -921,6 +972,12 @@ fn get_nametable_4_framebuffer(ppu: *PPU): Image {
 }
 
 fn render_objects(ppu: *PPU) {
+  if (ppu.reg.mask.* & MASK_FLAG_SPRITE) == 0 {
+    return;
+  }
+
+  let render_left = (ppu.reg.mask.* & MASK_FLAG_SPRITE_LEFTMOST) != 0;
+
   let i = 63 * 4;
   while i >= 0 {
     let byte0 = ppu.oam.*[i+0].*;
@@ -933,6 +990,13 @@ fn render_objects(ppu: *PPU) {
     let tile_id = byte1 as u16;
 
     if y >= 0xef {
+      i = i - 4;
+      continue;
+    }
+
+    y = y + 1;
+
+    if !render_left && x < 8 {
       i = i - 4;
       continue;
     }
@@ -951,7 +1015,7 @@ fn render_objects(ppu: *PPU) {
     }
 
     let palette_id = byte2 & 0b11;
-    let behind_background = (byte2 & 0b0001_0000) != 0;
+    let behind_background = (byte2 & 0b0010_0000) != 0;
     let flip_vertical = (byte2 & 0b1000_0000) != 0;
     let flip_horizontal = (byte2 & 0b0100_0000) != 0;
 
@@ -979,23 +1043,23 @@ fn render_objects(ppu: *PPU) {
       let framebuffer_offset = y_final * 32 * 8 + x as u16;
 
       if flip_horizontal {
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 0], x7);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 1], x6);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 2], x5);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 3], x4);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 4], x3);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 5], x2);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 6], x1);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 7], x0);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 0, x7);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 1, x6);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 2, x5);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 3, x4);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 4, x3);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 5, x2);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 6, x1);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 7, x0);
       } else {
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 0], x0);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 1], x1);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 2], x2);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 3], x3);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 4], x4);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 5], x5);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 6], x6);
-        set_sprite_color(ppu, palette_id, ppu.screen_framebuffer.*[framebuffer_offset + 7], x7);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 0, x0);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 1, x1);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 2, x2);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 3, x3);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 4, x4);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 5, x5);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 6, x6);
+        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 7, x7);
       }
 
       y_offset = y_offset + 1;
@@ -1005,11 +1069,15 @@ fn render_objects(ppu: *PPU) {
   }
 }
 
-fn set_sprite_color(ppu: *PPU, palette_id: u8, pixel: *Color, color_offset: u8) {
+fn set_sprite_color(ppu: *PPU, behind_background: bool, palette_id: u8, fb_offset: u16, color_offset: u8) {
   if color_offset == 0 {
     return;
   }
 
+  if behind_background && (ppu.background_mask.*[fb_offset].* != 0) {
+    return;
+  }
+
   let color_idx = ppu.palette.*[(palette_id+4) * 4 + color_offset].*;
-  pixel.* = palette[color_idx].*;
+  ppu.screen_framebuffer.*[fb_offset].* = palette[color_idx].*;
 }

@@ -7,6 +7,7 @@ struct CPU {
   reg: Register,
   remaining_cycle: i32,
 
+  interrupt_triggered: bool,
   last_opcode: u8,
   last_ins: [*]u8, // TODO: remove this, this is for debugging only
   last_addr: u16,
@@ -411,6 +412,7 @@ fn reset(cpu: *CPU) {
   cpu.reg.status.* = 0x00 | FLAG_MASK_INTERRUPT_DISABLE | FLAG_MASK_1;
   cpu.reg.pc.* = mem_read_u16(0xfffc);
   cpu.remaining_cycle.* = 7;
+  cpu.interrupt_triggered.* = false;
 }
 
 fn mem_read_u16(addr: u16): u16 {
@@ -442,7 +444,12 @@ fn interrupt(cpu: *CPU) {
   cpu.reg.pc.* = hi << 8 | lo;
 }
 
-fn non_maskable_interrupt(cpu: *CPU) {
+fn trigger_non_maskable_interrupt(cpu: *CPU) {
+  cpu.interrupt_triggered.* = true;
+}
+
+fn non_maskable_interrupt(cpu: *CPU): i32 {
+  cpu.interrupt_triggered.* = false;
   stack_push_u16(cpu, cpu.reg.pc.*);
 
   cpu.reg.status.* = cpu.reg.status.* & ~FLAG_MASK_BREAK;
@@ -454,14 +461,20 @@ fn non_maskable_interrupt(cpu: *CPU) {
   let lo = bus::read(addr_0) as u16;
   let hi = bus::read(addr_0 + 1) as u16;
   cpu.reg.pc.* = (hi << 8) | lo;
+
+  return 7;
 }
 
-fn tick2(cpu: *CPU): i32 {
+fn tick(cpu: *CPU): i32 {
   return execute_next_instruction(cpu);
 }
 
 let debug: bool = false;
 fn execute_next_instruction(cpu: *CPU): i32 {
+  if cpu.interrupt_triggered.* {
+    return non_maskable_interrupt(cpu);
+  }
+
   let opcode = bus::read(cpu.reg.pc.*);
 
   if debug {
