@@ -10,3 +10,5 @@ This project is in WIP state.
 ![Donkey Kong](img/donkey_kong.png)
 ![Pacman](img/pacman.png)
 ![Mega-Man](img/mega_man.png)
+![Concentration Room](img/croom.png)
+![Flappy Bird](img/flappy_bird.png)
