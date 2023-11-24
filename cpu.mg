@@ -5,13 +5,7 @@ import mem "mem";
 
 struct CPU {
   reg: Register,
-  remaining_cycle: i32,
-
   interrupt_triggered: bool,
-  last_opcode: u8,
-  last_ins: [*]u8, // TODO: remove this, this is for debugging only
-  last_addr: u16,
-  last_pc: u16,
 }
 
 fn new(): CPU {
@@ -411,7 +405,6 @@ fn reset(cpu: *CPU) {
   cpu.reg.sp.* = 0xfd;
   cpu.reg.status.* = 0x00 | FLAG_MASK_INTERRUPT_DISABLE | FLAG_MASK_1;
   cpu.reg.pc.* = mem_read_u16(0xfffc);
-  cpu.remaining_cycle.* = 7;
   cpu.interrupt_triggered.* = false;
 }
 
@@ -483,15 +476,12 @@ fn execute_next_instruction(cpu: *CPU): i32 {
     debug_u8(opcode);
   }
 
-  cpu.last_opcode.* = opcode;
-  cpu.last_pc.* = cpu.reg.pc.*;
   cpu.reg.pc.* = cpu.reg.pc.* + 1;
 
   cpu.reg.status.* = cpu.reg.status.* | FLAG_MASK_1;
 
   let ins = instruction_map[opcode];
   let addr_mode = ins.addr_mode.*;
-  cpu.last_ins.* = ins.desc.*;
 
   let addr: u16;
 
@@ -614,8 +604,6 @@ fn execute_next_instruction(cpu: *CPU): i32 {
       fmt::print_str("    ");
     }
   }
-
-  cpu.last_addr.* = addr;
 
   if debug {
     if ins.illegal.* {
