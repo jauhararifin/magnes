@@ -50,3 +50,17 @@ bash ./build.sh
 
 After running this script, you should see a `./build` directory in your current working directory, containing all the files required to run the game.
 Checkout `./build/platform/web/` directory to run it on the web.
+
+## Running
+
+1. Serve the build directory using an HTTP server. You can use the `http-server` package from NPM for this purpose.
+
+```bash
+npx http-server ./build/platform/web/  -p 8080
+```
+
+2. Open your browser and navigate to http://localhost:8080.
+
+## Demo
+
+Checkout the demo [here](https://magnes.jauhar.dev).
