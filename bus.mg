@@ -50,7 +50,7 @@ fn read(addr: u16): u8 {
       fmt::print_str(",result=");
       fmt::print_u8(data);
       fmt::print_str(",pc=");
-      fmt::print_u16(the_cpu.reg.pc.*);
+      fmt::print_u16(the_cpu.pc.*);
       fmt::print_str(".\n");
     }
     return data;
