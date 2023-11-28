@@ -7,7 +7,11 @@ import ppu "ppu";
 import joypad "joypad";
 
 let the_cpu: *cpu::CPU = init_cpu();
-let the_ppu: *ppu::PPU = ppu::new(send_non_maskable_interrupt);
+let the_ppu: *ppu::PPU = ppu::new(
+  send_non_maskable_interrupt,
+  read_chr_rom,
+  write_chr_rom,
+);
 let the_rom: *rom::ROM = mem::alloc::<rom::ROM>();
 let ram: [*]u8 = mem::alloc_array::<u8>(0x2000);
 let debug: bool = false;
@@ -16,6 +20,14 @@ let joypad_2: *joypad::Joypad = joypad::new();
 
 fn send_non_maskable_interrupt() {
   cpu::trigger_non_maskable_interrupt(the_cpu);
+}
+
+fn read_chr_rom(addr: u16): u8 {
+  return rom::read_chr(the_rom, addr);
+}
+
+fn write_chr_rom(addr: u16, data: u8) {
+  return rom::write_chr(the_rom, addr, data);
 }
 
 fn init_cpu(): *cpu::CPU {

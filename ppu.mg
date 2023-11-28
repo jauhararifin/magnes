@@ -2,8 +2,6 @@ import wasm "wasm";
 import mem "mem";
 import fmt "fmt";
 import rom "rom";
-import cpu "cpu";
-import bus "bus";
 
 // PPU memory map
 // [0x0000 - 0x2000): pattern table (the characters rom)
@@ -65,6 +63,8 @@ let MASK_FLAG_EMPHASIZE_BLUE: u8      = 1<<7;
 
 struct PPU {
   fn_trigger_non_maskable_interrupt: fn(),
+  fn_read_chr:                       fn(u16): u8,
+  fn_write_chr:                      fn(u16, u8),
 
   // maybe instead of storing the color id like this, 
   // we can store the actual color directly.
@@ -120,10 +120,16 @@ struct Debug {
   nametable_4_framebuffer: [*]Color,
 }
 
-fn new(fn_trigger_nmi: fn()): *PPU {
+fn new(
+  fn_trigger_nmi:   fn(),
+  fn_read_chr_rom:  fn(u16): u8,
+  fn_write_chr_rom: fn(u16, u8),
+): *PPU {
   let p = mem::alloc::<PPU>();
 
   p.fn_trigger_non_maskable_interrupt.* = fn_trigger_nmi;
+  p.fn_read_chr.*                       = fn_read_chr_rom;
+  p.fn_write_chr.*                      = fn_write_chr_rom;
 
   // tile framebuffer stores 2 banks of 256 tile of 8x8 pixels of RGBa channel
   // so the size is 2*256*8*8 = 0x8000
@@ -355,7 +361,7 @@ fn read_data(ppu: *PPU): u8 {
 
   if addr < 0x2000 {
     let data = ppu.data.*;
-    ppu.data.* = rom::read_chr(bus::the_rom, addr);
+    ppu.data.* = ppu.fn_read_chr.*(addr);
     return data;
   } else if addr < 0x3000 {
     let data = ppu.data.*;
@@ -432,7 +438,7 @@ fn write_data(ppu: *PPU, data: u8) {
   }
 
   if addr < 0x2000 {
-    rom::write_chr(bus::the_rom, addr, data);
+    ppu.fn_write_chr.*(addr, data);
   } else if addr < 0x3000 {
     let addr = mirror_vram(ppu.mirroring.*, addr - 0x2000);
     ppu.vram.*[addr].* = data;
@@ -596,8 +602,8 @@ fn update_debug_chr_tile(ppu: *PPU) {
 
         let y: u16 = 0;
         while y < 8 {
-          let hi = rom::read_chr(bus::the_rom, chr_offset + y);
-          let lo = rom::read_chr(bus::the_rom, chr_offset + y + 8);
+          let hi = ppu.fn_read_chr.*(chr_offset + y);
+          let lo = ppu.fn_read_chr.*(chr_offset + y + 8);
 
           let x7 = ((lo & 0b0000_0001) << 1) |  (hi & 0b0000_0001);
           let x6 =  (lo & 0b0000_0010)       | ((hi & 0b0000_0010) >> 1);
@@ -759,8 +765,8 @@ fn render_background(ppu: *PPU, y: i32): bool {
       sprite_pattern_addr = 0x1000;
     }
     let sprite_chr_offset = sprite_pattern_addr + sprite0_tile_id * 16;
-    let sprite0_hi = rom::read_chr(bus::the_rom, sprite_chr_offset + sprite0_y_offset as u16);
-    let sprite0_lo = rom::read_chr(bus::the_rom, sprite_chr_offset + sprite0_y_offset as u16 + 8);
+    let sprite0_hi = ppu.fn_read_chr.*(sprite_chr_offset + sprite0_y_offset as u16);
+    let sprite0_lo = ppu.fn_read_chr.*(sprite_chr_offset + sprite0_y_offset as u16 + 8);
     sprite0_x_color[7].* = ((sprite0_lo & 0b0000_0001) << 1) |  (sprite0_hi & 0b0000_0001);
     sprite0_x_color[6].* =  (sprite0_lo & 0b0000_0010)       | ((sprite0_hi & 0b0000_0010) >> 1);
     sprite0_x_color[5].* = ((sprite0_lo & 0b0000_0100) >> 1) | ((sprite0_hi & 0b0000_0100) >> 2);
@@ -827,10 +833,10 @@ fn render_background(ppu: *PPU, y: i32): bool {
 
     let tile_id = nametable[tile_id].*;
     let chr_offset = pattern_addr + tile_id as u16 * 16;
-    let hi = rom::read_chr(bus::the_rom, chr_offset + tile_y as u16);
-    let lo = rom::read_chr(bus::the_rom, chr_offset + tile_y as u16 + 8);
+    let hi = ppu.fn_read_chr.*(chr_offset + tile_y as u16);
+    let lo = ppu.fn_read_chr.*(chr_offset + tile_y as u16 + 8);
     let msb: u8 = 0;
-    if (tile_x == 7 && (lo & 1) != 0) || (lo & (0b1000_0000 >> tile_x)) != 0 {
+    if (tile_x == 7 && (lo & 1) != 0) || (lo & (0b1000_0000 as u8 >> tile_x)) != 0 {
       msb = 1;
     }
     let lsb: u8 = 0;
@@ -909,8 +915,8 @@ fn render_nametable(ppu: *PPU, nametable: u8, framebuffer: [*]Color) {
 
       let y: u16 = 0;
       while y < 8 {
-        let hi = rom::read_chr(bus::the_rom, chr_offset + y);
-        let lo = rom::read_chr(bus::the_rom, chr_offset + y + 8);
+        let hi = ppu.fn_read_chr.*(chr_offset + y);
+        let lo = ppu.fn_read_chr.*(chr_offset + y + 8);
 
         let x: u8 = 0;
         while x < 8 {
@@ -1027,8 +1033,8 @@ fn render_objects(ppu: *PPU) {
 
     let y_offset: u16 = 0;
     while y_offset < 8 {
-      let hi = rom::read_chr(bus::the_rom, chr_offset + y_offset);
-      let lo = rom::read_chr(bus::the_rom, chr_offset + y_offset + 8);
+      let hi = ppu.fn_read_chr.*(chr_offset + y_offset);
+      let lo = ppu.fn_read_chr.*(chr_offset + y_offset + 8);
 
       let x7 = ((lo & 0b0000_0001) << 1) |  (hi & 0b0000_0001);
       let x6 =  (lo & 0b0000_0010)       | ((hi & 0b0000_0010) >> 1);
