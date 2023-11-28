@@ -6,17 +6,23 @@ import rom "rom";
 import ppu "ppu";
 import joypad "joypad";
 
-let the_cpu: *cpu::CPU = init_cpu();
-let the_ppu: *ppu::PPU = ppu::new(
-  send_non_maskable_interrupt,
-  read_chr_rom,
-  write_chr_rom,
-);
+let the_cpu: *cpu::CPU = cpu::new();
+let the_ppu: *ppu::PPU = ppu::new();
 let the_rom: *rom::ROM = mem::alloc::<rom::ROM>();
 let ram: [*]u8 = mem::alloc_array::<u8>(0x2000);
 let debug: bool = false;
 let joypad_1: *joypad::Joypad = joypad::new();
 let joypad_2: *joypad::Joypad = joypad::new();
+
+fn init() {
+  cpu::wire(the_cpu, read, write);
+  ppu::wire(
+    the_ppu,
+    send_non_maskable_interrupt,
+    read_chr_rom,
+    write_chr_rom,
+  )
+}
 
 fn send_non_maskable_interrupt() {
   cpu::trigger_non_maskable_interrupt(the_cpu);
@@ -28,12 +34,6 @@ fn read_chr_rom(addr: u16): u8 {
 
 fn write_chr_rom(addr: u16, data: u8) {
   return rom::write_chr(the_rom, addr, data);
-}
-
-fn init_cpu(): *cpu::CPU {
-  let c = mem::alloc::<cpu::CPU>();
-  c.* = cpu::new()
-  return c;
 }
 
 fn reset() {
@@ -59,16 +59,6 @@ fn read(addr: u16): u8 {
     return ram[addr & 0x07ff].*;
   } else if (addr >= 0x2000) && (addr < 0x4000) {
     let data = ppu::get_register(the_ppu, (addr & 0x07) as u8);
-
-    if debug {
-      fmt::print_str(".read ppu register i=");
-      fmt::print_u16(addr);
-      fmt::print_str(",result=");
-      fmt::print_u8(data);
-      fmt::print_str(",pc=");
-      fmt::print_u16(the_cpu.pc.*);
-      fmt::print_str(".\n");
-    }
     return data;
   } else if addr == 0x4016 {
     return joypad::read(joypad_1);

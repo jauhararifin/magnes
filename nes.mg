@@ -6,6 +6,11 @@ import ppu "ppu";
 import fmt "fmt";
 import joypad "joypad";
 
+@main()
+fn main() {
+  bus::init();
+}
+
 let remaining_elapsed_nanosecond: i64 = 0;
 let cycle_rate: i64 = 1_789_773; // cycles per second
 let cycle_period: i64 = 1_000_000_000 / cycle_rate;

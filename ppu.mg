@@ -120,16 +120,8 @@ struct Debug {
   nametable_4_framebuffer: [*]Color,
 }
 
-fn new(
-  fn_trigger_nmi:   fn(),
-  fn_read_chr_rom:  fn(u16): u8,
-  fn_write_chr_rom: fn(u16, u8),
-): *PPU {
+fn new(): *PPU {
   let p = mem::alloc::<PPU>();
-
-  p.fn_trigger_non_maskable_interrupt.* = fn_trigger_nmi;
-  p.fn_read_chr.*                       = fn_read_chr_rom;
-  p.fn_write_chr.*                      = fn_write_chr_rom;
 
   // tile framebuffer stores 2 banks of 256 tile of 8x8 pixels of RGBa channel
   // so the size is 2*256*8*8 = 0x8000
@@ -148,6 +140,17 @@ fn new(
 
   reset(p);
   return p;
+}
+
+fn wire(
+  ppu:              *PPU,
+  fn_trigger_nmi:   fn(),
+  fn_read_chr_rom:  fn(u16): u8,
+  fn_write_chr_rom: fn(u16, u8),
+) {
+  ppu.fn_trigger_non_maskable_interrupt.* = fn_trigger_nmi;
+  ppu.fn_read_chr.*                       = fn_read_chr_rom;
+  ppu.fn_write_chr.*                      = fn_write_chr_rom;
 }
 
 fn load_rom(ppu: *PPU, cart: *rom::ROM) {
