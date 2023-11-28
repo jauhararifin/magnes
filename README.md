@@ -64,3 +64,8 @@ npx http-server ./build/platform/web/  -p 8080
 ## Demo
 
 Checkout the demo [here](https://magnes.jauhar.dev).
+
+## Reference
+
+- [6502 CPU Reference](https://www.masswerk.at/6502/6502_instruction_set.html#opcodes-footnote2)
+- [Nesdev Wiki](https://www.nesdev.org/wiki)
