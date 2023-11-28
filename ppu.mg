@@ -64,6 +64,8 @@ let MASK_FLAG_EMPHASIZE_GREEN: u8     = 1<<6;
 let MASK_FLAG_EMPHASIZE_BLUE: u8      = 1<<7;
 
 struct PPU {
+  fn_trigger_non_maskable_interrupt: fn(),
+
   // maybe instead of storing the color id like this, 
   // we can store the actual color directly.
   palette:         [*]u8,
@@ -118,8 +120,10 @@ struct Debug {
   nametable_4_framebuffer: [*]Color,
 }
 
-fn new(): *PPU {
+fn new(fn_trigger_nmi: fn()): *PPU {
   let p = mem::alloc::<PPU>();
+
+  p.fn_trigger_non_maskable_interrupt.* = fn_trigger_nmi;
 
   // tile framebuffer stores 2 banks of 256 tile of 8x8 pixels of RGBa channel
   // so the size is 2*256*8*8 = 0x8000
@@ -231,7 +235,7 @@ fn tick(ppu: *PPU, cycles: i64) {
       ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_VBLANK_STARTED;
       ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_ZERO_HIT;
       if (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0 {
-        cpu::trigger_non_maskable_interrupt(bus::the_cpu);
+        ppu.fn_trigger_non_maskable_interrupt.*();
       }
     }
     if ppu.scanline.* >= 262 {
@@ -265,7 +269,7 @@ fn set_register(ppu: *PPU, id: u8, data: u8) {
     let new_nmi_status = (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0;
     let status_vblank = (ppu.reg.status.* & STATUS_FLAG_VBLANK_STARTED) != 0;
     if !old_nmi_status && new_nmi_status && status_vblank {
-      cpu::trigger_non_maskable_interrupt(bus::the_cpu);
+      ppu.fn_trigger_non_maskable_interrupt.*();
     }
   } else if id == 1 {
     ppu.reg.mask.* = data;
