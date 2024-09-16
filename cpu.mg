@@ -3,8 +3,8 @@ import fmt "fmt";
 import mem "mem";
 
 struct CPU {
-  fn_read:  fn(u16): u8,
-  fn_write: fn(u16, u8),
+  fn_read:  fn(addr: u16): u8,
+  fn_write: fn(addr: u16, data: u8),
 
   a:      u8,
   x:      u8,
@@ -24,8 +24,8 @@ fn new(): *CPU {
 
 fn wire(
   cpu:      *CPU,
-  fn_read:  fn(u16): u8,
-  fn_write: fn(u16, u8),
+  fn_read:  fn(addr: u16): u8,
+  fn_write: fn(addr: u16, data: u8),
 ) {
   cpu.fn_read.*  = fn_read;
   cpu.fn_write.* = fn_write;
@@ -136,7 +136,7 @@ struct Instruction {
   code:      u8,
   opcode:    u8,
   addr_mode: u8,
-  handler:   fn( *CPU, u8, u16): i32,
+  handler:   fn(cpu: *CPU, addr_mode: u8, addr: u16): i32,
   name:      [*]u8,
   desc:      [*]u8,
   illegal:   bool,

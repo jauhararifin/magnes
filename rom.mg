@@ -156,11 +156,11 @@ let mapper2: Mapper = Mapper {
 
 struct Mapper {
   id:        u8,
-  reset:     fn( *ROM),
-  read_prg:  fn( *ROM, u16): u8,
-  write_prg: fn( *ROM, u16, u8),
-  read_chr:  fn( *ROM, u16): u8,
-  write_chr: fn( *ROM, u16, u8),
+  reset:     fn(rom: *ROM),
+  read_prg:  fn(rom: *ROM, addr: u16): u8,
+  write_prg: fn(rom: *ROM, addr: u16, data: u8),
+  read_chr:  fn(rom: *ROM, addr: u16): u8,
+  write_chr: fn(rom: *ROM, addr: u16, data: u8),
 }
 
 fn mapper_0_reset(rom: *ROM) {

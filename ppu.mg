@@ -63,8 +63,8 @@ let MASK_FLAG_EMPHASIZE_BLUE: u8      = 1<<7;
 
 struct PPU {
   fn_trigger_non_maskable_interrupt: fn(),
-  fn_read_chr:                       fn(u16): u8,
-  fn_write_chr:                      fn(u16, u8),
+  fn_read_chr:                       fn(addr: u16): u8,
+  fn_write_chr:                      fn(addr: u16, data:u8),
 
   // maybe instead of storing the color id like this, 
   // we can store the actual color directly.
@@ -145,8 +145,8 @@ fn new(): *PPU {
 fn wire(
   ppu:              *PPU,
   fn_trigger_nmi:   fn(),
-  fn_read_chr_rom:  fn(u16): u8,
-  fn_write_chr_rom: fn(u16, u8),
+  fn_read_chr_rom:  fn(addr: u16): u8,
+  fn_write_chr_rom: fn(addr: u16, data: u8),
 ) {
   ppu.fn_trigger_non_maskable_interrupt.* = fn_trigger_nmi;
   ppu.fn_read_chr.*                       = fn_read_chr_rom;
