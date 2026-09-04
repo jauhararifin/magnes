@@ -18,6 +18,8 @@ struct ROM {
   program_size:    usize,
   characters:      [*]u8,
   characters_size: usize,
+  // true when the cartridge has CHR RAM instead of CHR ROM.
+  chr_is_ram:      bool,
   mirroring:       u8,
   mapper:          Mapper,
 }
@@ -104,13 +106,28 @@ fn load(raw_bytes: [*]u8): ROM {
   }
   let chr_start: usize = prg_start + prg_rom_size;
 
+  // Cartridges without CHR ROM have 8KB of CHR RAM instead.
+  let characters: [*]u8 = raw_bytes[chr_start] as [*]u8;
+  let chr_is_ram = false;
+  if chr_rom_size == 0 {
+    chr_rom_size = CHR_ROM_PAGE_SIZE;
+    characters = mem::alloc_array::<u8>(chr_rom_size);
+    chr_is_ram = true;
+    let i: usize = 0;
+    while i < chr_rom_size {
+      characters[i].* = 0;
+      i = i + 1;
+    }
+  }
+
   return ROM{
     valid:           true,
     error:           0 as [*]u8,
     program:         raw_bytes[prg_start] as [*]u8,
     program_size:    prg_rom_size,
-    characters:      raw_bytes[chr_start] as [*]u8,
+    characters:      characters,
     characters_size: chr_rom_size,
+    chr_is_ram:      chr_is_ram,
     mirroring:       mirroring,
     mapper:          mapper,
   };
@@ -184,20 +201,16 @@ fn mapper_0_read_chr(rom: *ROM, addr: u16): u8 {
 }
 
 fn mapper_0_write_chr(rom: *ROM, addr: u16, data: u8) {
-  rom.characters.*[addr].* = data;
+  if rom.chr_is_ram.* {
+    rom.characters.*[addr].* = data;
+  }
 }
 
 // TODO: move this into local variable
 let mapper_2_selected_bank: u8 = 0;
-let fallback_chr_rom: [*]u8 = mem::alloc_array::<u8>(0x2000);
 
 fn mapper_2_reset(rom: *ROM) {
   mapper_2_selected_bank = 0;
-  let i = 0;
-  while i < 0x2000 {
-    fallback_chr_rom[i].* = 0;
-    i = i + 1;
-  }
 }
 
 fn mapper_2_read_prg(rom: *ROM, addr: u16): u8 {
@@ -209,20 +222,18 @@ fn mapper_2_read_prg(rom: *ROM, addr: u16): u8 {
 }
 
 fn mapper_2_write_prg(rom: *ROM, addr: u16, data: u8) {
-  mapper_2_selected_bank = data & 0x0f;
+  // UNROM boards exist with 8, 16 and 32 banks (128KB, 256KB and 512KB),
+  // so the bank number has to be masked by the actual number of banks.
+  let bank_count = rom.program_size.* / PRG_ROM_PAGE_SIZE;
+  mapper_2_selected_bank = ((data as usize) % bank_count) as u8;
 }
 
 fn mapper_2_read_chr(rom: *ROM, addr: u16): u8 {
-  if rom.characters_size.* < addr as usize {
-    return fallback_chr_rom[addr].*;
-  }
   return rom.characters.*[addr].*;
 }
 
 fn mapper_2_write_chr(rom: *ROM, addr: u16, data: u8) {
-  if rom.characters_size.* < addr as usize {
-    fallback_chr_rom[addr].* = data;
-    return;
+  if rom.chr_is_ram.* {
+    rom.characters.*[addr].* = data;
   }
-  rom.characters.*[addr].* = data;
 }

@@ -22,7 +22,7 @@ fn new(): *Joypad {
     strobe:   false,
     button_i: 0,
     status:   0,
-  }
+  };
   return p;
 }
 
@@ -31,7 +31,7 @@ fn reset(joypad: *Joypad) {
     strobe:   false,
     button_i: 0,
     status:   0,
-  }
+  };
 }
 
 fn write(joypad: *Joypad, data: u8) {

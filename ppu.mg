@@ -39,6 +39,25 @@ import rom "rom";
 // to calcualte the address of palette P, color C just calculate: 0x3f00 + P * 4 + C
 // Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
 
+// Timing model
+// -----------
+// A frame is 262 scanlines of 341 dots (PPU cycles). Scanline 0-239 are visible,
+// 240 is the post-render line, 241-260 is vblank and 261 is the pre-render line.
+// Every visible scanline is rasterized at once (background + sprites) when the
+// PPU reaches dot 0 of that line, using the state of the internal registers at
+// that moment. The remaining per-dot events that games can observe (vblank flag,
+// sprite 0 hit, the "loopy" scroll register updates at dot 256/257/280) are
+// emulated at their real dot position, see `tick`.
+//
+// Scrolling is emulated with the real internal registers of the PPU
+// (https://www.nesdev.org/wiki/PPU_scrolling):
+//   v: current VRAM address (15 bits) used for both $2007 access and rendering
+//   t: temporary VRAM address, the "top left" of the screen
+//   x: fine x scroll (3 bits)
+//   w: first/second write latch shared by $2005 and $2006
+// That is what makes $2006 writes, mid-frame $2005 writes and split-screen
+// tricks behave like the real hardware.
+
 let CONTROL_FLAG_NAMETABLE_1: u8             = 1;
 let CONTROL_FLAG_NAMETABLE_2: u8             = 1<<1;
 let CONTROL_FLAG_VRAM_ADD: u8                = 1<<2;
@@ -61,15 +80,29 @@ let MASK_FLAG_EMPHASIZE_RED: u8       = 1<<5;
 let MASK_FLAG_EMPHASIZE_GREEN: u8     = 1<<6;
 let MASK_FLAG_EMPHASIZE_BLUE: u8      = 1<<7;
 
+let SCANLINE_POST_RENDER: i32  = 240;
+let SCANLINE_VBLANK_START: i32 = 241;
+let SCANLINE_PRE_RENDER: i32   = 261;
+let SCANLINES_PER_FRAME: i32   = 262;
+let DOTS_PER_SCANLINE: i32     = 341;
+
+// OAM DMA takes 513 CPU cycles (514 on an odd cpu cycle, which we ignore).
+let OAM_DMA_CPU_CYCLES: i64 = 513;
+
+// NOTE: with the current magelang compiler, casting an unsigned integer
+// directly to i32 sign extends it (`0x83 as i32 == -125`). Always go through
+// u32 first: `(value as u32) as i32`.
+
 struct PPU {
   fn_trigger_non_maskable_interrupt: fn(),
   fn_read_chr:                       fn(addr: u16): u8,
   fn_write_chr:                      fn(addr: u16, data:u8),
 
-  // maybe instead of storing the color id like this, 
+  // maybe instead of storing the color id like this,
   // we can store the actual color directly.
   palette:         [*]u8,
-  // VRAM also known as nametable, which is 2KB long.
+  // VRAM also known as nametable, which is 2KB long (4KB for four-screen
+  // cartridges, see mirror_vram).
   // NES screen is 256 x 240 and composed of 8x8 tiles
   // so there are 256/8=32 tile width, and 240/8=30 tile height.
   // The first 32*30=960 bytes represent the tile used to render
@@ -84,24 +117,39 @@ struct PPU {
 
   reg: Register,
 
-  // for data transfer between cpu and ppu
-  addr_lo:       u8,
-  addr_hi:       u8,
-  data:          u8,
-  is_reading_lo: bool,
-  oam_addr:      u8,
+  // internal scroll/address registers, see the "Timing model" comment above.
+  v: u16,
+  t: u16,
+  x: u8,
+  w: bool,
 
-  scroll_x:     u8,
-  scroll_y:     u8,
-  scroll_latch: bool,
+  // $2007 read buffer
+  data_buffer: u8,
+  // Last value that went through the CPU<->PPU bus. Reading a write only
+  // register returns it ("open bus").
+  io_latch:    u8,
+  oam_addr:    u8,
 
+  // The frame that is being rasterized (back) and the last completed frame
+  // that the platform layer displays (front). They are swapped at the end of
+  // every visible frame so the platform never sees a half rendered frame.
   screen_framebuffer: [*]Color,
-  background_mask:    [*]u8,
+  back_framebuffer:   [*]Color,
+
+  // per-scanline scratch buffers
+  bg_pixel:  [*]u8,
+  bg_pal:    [*]u8,
+  spr_pixel: [*]u8,
+  spr_pal:   [*]u8,
+  spr_flags: [*]u8,
 
   debug: Debug,
 
-  cycles:   i32,
+  dot:      i32,
   scanline: i32,
+  frame:    i32,
+  // dot at which sprite 0 hit happens on the current scanline, -1 if none.
+  sprite0_hit_dot: i32,
 }
 
 struct Register {
@@ -120,6 +168,9 @@ struct Debug {
   nametable_4_framebuffer: [*]Color,
 }
 
+let SPR_FLAG_BEHIND_BACKGROUND: u8 = 1;
+let SPR_FLAG_SPRITE_0: u8          = 2;
+
 fn new(): *PPU {
   let p = mem::alloc::<PPU>();
 
@@ -131,12 +182,16 @@ fn new(): *PPU {
   p.debug.nametable_2_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
   p.debug.nametable_3_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
   p.debug.nametable_4_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
-  p.vram.*                          = mem::alloc_array::<u8>(0x800);
+  p.vram.*                          = mem::alloc_array::<u8>(0x1000);
   p.palette.*                       = mem::alloc_array::<u8>(0x20);
   p.oam.*                           = mem::alloc_array::<u8>(64 * 4);
-  p.oam_addr.*                      = 0;
   p.screen_framebuffer.*            = mem::alloc_array::<Color>(256 * 256); // technically only 256 x 240 is used
-  p.background_mask.*               = mem::alloc_array::<u8>(256 * 256); // technically only 256 x 240 is used
+  p.back_framebuffer.*              = mem::alloc_array::<Color>(256 * 256);
+  p.bg_pixel.*                      = mem::alloc_array::<u8>(256);
+  p.bg_pal.*                        = mem::alloc_array::<u8>(256);
+  p.spr_pixel.*                     = mem::alloc_array::<u8>(256);
+  p.spr_pal.*                       = mem::alloc_array::<u8>(256);
+  p.spr_flags.*                     = mem::alloc_array::<u8>(256);
 
   reset(p);
   return p;
@@ -160,21 +215,23 @@ fn load_rom(ppu: *PPU, cart: *rom::ROM) {
 }
 
 fn reset(ppu: *PPU) {
-  ppu.reg.control.*   = 0;
-  ppu.reg.status.*    = 0;
-  ppu.addr_lo.*       = 0;
-  ppu.addr_hi.*       = 0;
-  ppu.data.*          = 0;
-  ppu.is_reading_lo.* = false;
-  ppu.oam_addr.*      = 0;
-  ppu.scroll_x.*      = 0;
-  ppu.scroll_y.*      = 0;
-  ppu.scroll_latch.*  = false;
-  ppu.cycles.*        = 0;
+  ppu.reg.control.*    = 0;
+  ppu.reg.status.*     = 0;
+  ppu.reg.mask.*       = 0;
+  ppu.v.*              = 0;
+  ppu.t.*              = 0;
+  ppu.x.*              = 0;
+  ppu.w.*              = false;
+  ppu.data_buffer.*    = 0;
+  ppu.io_latch.*       = 0;
+  ppu.oam_addr.*       = 0;
+  ppu.dot.*            = 0;
+  ppu.scanline.*       = 0;
+  ppu.frame.*          = 0;
+  ppu.sprite0_hit_dot.* = -1;
 
-  // vram,palette,oam,screenframebuffer
   let i = 0;
-  while i < 0x800 {
+  while i < 0x1000 {
     ppu.vram.*[i].* = 0;
     i = i + 1;
   }
@@ -192,71 +249,162 @@ fn reset(ppu: *PPU) {
   }
 
   let i = 0;
-  while i < 256 * 240 {
-    ppu.screen_framebuffer.*[i].* = Color{r:0,g:0,b:0,a:0};
-    ppu.background_mask.*[i].* = 0;
+  while i < 256 * 256 {
+    ppu.screen_framebuffer.*[i].* = Color{r:0,g:0,b:0,a:0xff};
+    ppu.back_framebuffer.*[i].*   = Color{r:0,g:0,b:0,a:0xff};
     i = i + 1;
   }
 }
 
+fn is_rendering_enabled(ppu: *PPU): bool {
+  return (ppu.reg.mask.* & (MASK_FLAG_BACKGROUND | MASK_FLAG_SPRITE)) != 0;
+}
+
+// Advances the PPU by `cycles` dots. Instead of stepping dot by dot, we jump
+// from one interesting dot to the next one (see next_event_dot) which keeps
+// this cheap while still setting flags and updating the scroll registers at
+// the exact dot the hardware does.
 fn tick(ppu: *PPU, cycles: i64) {
-  ppu.cycles.* = ppu.cycles.* + cycles as i32;
-
-  while ppu.cycles.* >= 341 {
-    // fmt::print_str("scanline=");
-    // fmt::print_i32(ppu.scanline.*);
-    // fmt::print_str("scroll_x=");
-    // fmt::print_u8(ppu.scroll_x.*);
-    // fmt::print_str(",scroll_y=");
-    // fmt::print_u8(ppu.scroll_y.*);
-    // fmt::print_str(",selected_nametable=");
-    // let selected_nametable: u8 = (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_1) | (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_2);
-    // fmt::print_u8(selected_nametable);
-    // fmt::print_str("\n");
-
-    let is_zero_hit = false;
-    if ppu.scanline.* < 240 {
-      let hit = render_background(ppu, ppu.scanline.*);
-      if (ppu.reg.mask.* & MASK_FLAG_SPRITE) != 0 {
-        is_zero_hit = hit;
-      }
+  let remaining = cycles as i32;
+  while remaining > 0 {
+    let next = next_event_dot(ppu);
+    let step = next - ppu.dot.*;
+    if step > remaining {
+      step = remaining;
     }
-
-    if is_zero_hit {
-      // fmt::print_str("zero hit on scanline=");
-      // fmt::print_i32(ppu.scanline.* as i32);
-      // fmt::print_str(",scroll_x=");
-      // fmt::print_u8(ppu.scroll_x.*);
-      // fmt::print_str(",scroll_y=");
-      // fmt::print_u8(ppu.scroll_y.*);
-      // fmt::print_str(",sprite0_x=");
-      // fmt::print_u8(ppu.oam.*[3].*);
-      // fmt::print_str(",sprite0_y=");
-      // fmt::print_u8(ppu.oam.*[0].*);
-      // fmt::print_str("\n");
-      ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_ZERO_HIT;
-    }
-
-    ppu.cycles.* = ppu.cycles.* - 341;
-    ppu.scanline.* = ppu.scanline.* + 1;
-
-    if ppu.scanline.* == 241 {
-      ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_VBLANK_STARTED;
-      ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_ZERO_HIT;
-      if (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0 {
-        ppu.fn_trigger_non_maskable_interrupt.*();
-      }
-    }
-    if ppu.scanline.* >= 262 {
-      ppu.scanline.* = 0;
-      ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_ZERO_HIT;
-      ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_VBLANK_STARTED;
+    ppu.dot.* = ppu.dot.* + step;
+    remaining = remaining - step;
+    if ppu.dot.* == next {
+      handle_dot_event(ppu);
     }
   }
 }
 
+fn next_event_dot(ppu: *PPU): i32 {
+  let dot = ppu.dot.*;
+  let scanline = ppu.scanline.*;
+  let next = DOTS_PER_SCANLINE;
+
+  if scanline == SCANLINE_VBLANK_START || scanline == SCANLINE_PRE_RENDER {
+    if dot < 1 { next = 1; }
+  }
+  if scanline < SCANLINE_POST_RENDER || scanline == SCANLINE_PRE_RENDER {
+    if dot < 256 && 256 < next { next = 256; }
+    if dot < 257 && 257 < next { next = 257; }
+  }
+  if scanline == SCANLINE_PRE_RENDER {
+    if dot < 280 && 280 < next { next = 280; }
+  }
+  if scanline < SCANLINE_POST_RENDER {
+    let hit = ppu.sprite0_hit_dot.*;
+    if hit >= 0 && dot < hit && hit < next { next = hit; }
+  }
+
+  return next;
+}
+
+fn handle_dot_event(ppu: *PPU) {
+  let dot = ppu.dot.*;
+  let scanline = ppu.scanline.*;
+
+  if dot == 1 {
+    if scanline == SCANLINE_VBLANK_START {
+      ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_VBLANK_STARTED;
+      if (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0 {
+        ppu.fn_trigger_non_maskable_interrupt.*();
+      }
+    } else if scanline == SCANLINE_PRE_RENDER {
+      ppu.reg.status.* = ppu.reg.status.* & ~(STATUS_FLAG_VBLANK_STARTED | STATUS_FLAG_ZERO_HIT | STATUS_FLAG_SPRITE_OVERFLOW);
+    }
+  }
+
+  if scanline < SCANLINE_POST_RENDER && dot == ppu.sprite0_hit_dot.* {
+    ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_ZERO_HIT;
+    ppu.sprite0_hit_dot.* = -1;
+  }
+
+  if (scanline < SCANLINE_POST_RENDER || scanline == SCANLINE_PRE_RENDER) && is_rendering_enabled(ppu) {
+    if dot == 256 {
+      increment_y(ppu);
+    } else if dot == 257 {
+      copy_horizontal(ppu);
+    } else if dot == 280 && scanline == SCANLINE_PRE_RENDER {
+      copy_vertical(ppu);
+    }
+  }
+
+  if dot >= DOTS_PER_SCANLINE {
+    ppu.dot.* = 0;
+    ppu.sprite0_hit_dot.* = -1;
+    ppu.scanline.* = scanline + 1;
+    if ppu.scanline.* >= SCANLINES_PER_FRAME {
+      ppu.scanline.* = 0;
+      ppu.frame.* = ppu.frame.* + 1;
+    }
+
+    if ppu.scanline.* < SCANLINE_POST_RENDER {
+      render_scanline(ppu, ppu.scanline.*);
+    } else if ppu.scanline.* == SCANLINE_POST_RENDER {
+      present(ppu);
+    }
+  }
+}
+
+// swap the back and front framebuffer, called when a frame is complete.
+fn present(ppu: *PPU) {
+  let front = ppu.screen_framebuffer.*;
+  ppu.screen_framebuffer.* = ppu.back_framebuffer.*;
+  ppu.back_framebuffer.* = front;
+}
+
+// Coarse X increment with nametable wrap around, used by rendering and by the
+// $2007 access "glitch" during rendering.
+fn increment_x(ppu: *PPU) {
+  let v = ppu.v.*;
+  if (v & 0x001f) == 31 {
+    v = v & ~(0x001f as u16);
+    v = v ^ 0x0400;
+  } else {
+    v = v + 1;
+  }
+  ppu.v.* = v;
+}
+
+// Fine Y increment (with coarse Y and nametable wrap around).
+fn increment_y(ppu: *PPU) {
+  let v = ppu.v.*;
+  if (v & 0x7000) != 0x7000 {
+    v = v + 0x1000;
+  } else {
+    v = v & ~(0x7000 as u16);
+    let y = (v & 0x03e0) >> 5;
+    if y == 29 {
+      y = 0;
+      v = v ^ 0x0800;
+    } else if y == 31 {
+      y = 0;
+    } else {
+      y = y + 1;
+    }
+    v = (v & ~(0x03e0 as u16)) | (y << 5);
+  }
+  ppu.v.* = v;
+}
+
+// copy the horizontal bits (coarse X, horizontal nametable) from t to v.
+fn copy_horizontal(ppu: *PPU) {
+  ppu.v.* = (ppu.v.* & ~(0x041f as u16)) | (ppu.t.* & 0x041f);
+}
+
+// copy the vertical bits (fine Y, coarse Y, vertical nametable) from t to v.
+fn copy_vertical(ppu: *PPU) {
+  ppu.v.* = (ppu.v.* & ~(0x7be0 as u16)) | (ppu.t.* & 0x7be0);
+}
+
+// Refreshes the debug views (pattern table and the four nametables). Called by
+// the platform layer once per displayed frame. The actual screen is rendered
+// scanline by scanline from `tick`.
 fn render(ppu: *PPU) {
-  render_objects(ppu);
   update_debug_chr_tile(ppu);
 
   render_nametable(ppu, 0, ppu.debug.nametable_1_framebuffer.*);
@@ -266,15 +414,13 @@ fn render(ppu: *PPU) {
 }
 
 fn set_register(ppu: *PPU, id: u8, data: u8) {
-  // fmt::print_str("set_register id=");
-  // fmt::print_u8(id);
-  // fmt::print_str(",data=");
-  // fmt::print_u8(data);
-  // fmt::print_str("\n");
+  ppu.io_latch.* = data;
 
   if id == 0 {
     let old_nmi_status = (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0;
     ppu.reg.control.* = data;
+    // t: ...GH.. ........ <- d: ......GH
+    ppu.t.* = (ppu.t.* & 0xf3ff) | (((data & 0x03) as u16) << 10);
     let new_nmi_status = (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0;
     let status_vblank = (ppu.reg.status.* & STATUS_FLAG_VBLANK_STARTED) != 0;
     if !old_nmi_status && new_nmi_status && status_vblank {
@@ -283,21 +429,36 @@ fn set_register(ppu: *PPU, id: u8, data: u8) {
   } else if id == 1 {
     ppu.reg.mask.* = data;
   } else if id == 2 {
-    fmt::print_str("register 2 is read only\n");
-    wasm::trap();
+    // status register is read only, writing to it does nothing.
   } else if id == 3 {
     ppu.oam_addr.* = data;
   } else if id == 4 {
     write_oam(ppu, data);
   } else if id == 5 {
-    if ppu.scroll_latch.* {
-      ppu.scroll_y.* = data;
+    if !ppu.w.* {
+      // t: ....... ...ABCDE <- d: ABCDE...
+      // x:              FGH <- d: .....FGH
+      ppu.t.* = (ppu.t.* & 0xffe0) | ((data >> 3) as u16);
+      ppu.x.* = data & 0x07;
+      ppu.w.* = true;
     } else {
-      ppu.scroll_x.* = data;
+      // t: FGH..AB CDE..... <- d: ABCDEFGH
+      ppu.t.* = (ppu.t.* & 0x8c1f) | (((data & 0x07) as u16) << 12) | (((data & 0xf8) as u16) << 2);
+      ppu.w.* = false;
     }
-    ppu.scroll_latch.* = !ppu.scroll_latch.*;
   } else if id == 6 {
-    put_addr(ppu, data);
+    if !ppu.w.* {
+      // t: .CDEFGH ........ <- d: ..CDEFGH
+      // t: Z...... ........ <- 0 (bit Z is cleared)
+      ppu.t.* = (ppu.t.* & 0x00ff) | (((data & 0x3f) as u16) << 8);
+      ppu.w.* = true;
+    } else {
+      // t: ....... ABCDEFGH <- d: ABCDEFGH
+      // v: <...all bits...> <- t: <...all bits...>
+      ppu.t.* = (ppu.t.* & 0xff00) | (data as u16);
+      ppu.v.* = ppu.t.*;
+      ppu.w.* = false;
+    }
   } else if id == 7 {
     write_data(ppu, data);
   } else {
@@ -309,43 +470,39 @@ fn set_register(ppu: *PPU, id: u8, data: u8) {
 }
 
 fn get_register(ppu: *PPU, id: u8): u8 {
-  if id == 0 {
-    fmt::print_str("register 0 is write only\n"); wasm::trap();
-  } else if id == 1 {
-    fmt::print_str("register 1 is write only\n"); wasm::trap();
-  } else if id == 2 {
+  if id == 2 {
     let reg = ppu.reg.status.*;
+    // the lower 5 bits of the status register are the stale bus contents.
+    let result = (reg & 0xe0) | (ppu.io_latch.* & 0x1f);
     ppu.reg.status.* = reg & ~STATUS_FLAG_VBLANK_STARTED;
-    ppu.scroll_latch.* = false;
-    ppu.is_reading_lo.* = false;
-    return reg;
-  } else if id == 3 {
-    fmt::print_str("register 3 is write only\n"); wasm::trap();
+    ppu.w.* = false;
+    ppu.io_latch.* = result;
+    return result;
   } else if id == 4 {
-    return ppu.oam.*[ppu.oam_addr.*].*;
-  } else if id == 5 {
-    fmt::print_str("register 5 is write only\n"); wasm::trap();
-  } else if id == 6 {
-    fmt::print_str("register 6 is write only\n"); wasm::trap();
+    let result = ppu.oam.*[ppu.oam_addr.*].*;
+    ppu.io_latch.* = result;
+    return result;
   } else if id == 7 {
-    return read_data(ppu);
-  } else {
-    fmt::print_str("setting invalid register id ");
-    fmt::print_u8(id);
-    fmt::print_str("\n");
-    wasm::trap();
+    let result = read_data(ppu);
+    ppu.io_latch.* = result;
+    return result;
   }
 
-  return 0;
+  // Reading a write only register ($2000, $2001, $2003, $2005, $2006) returns
+  // whatever is left on the bus. Some games do this (e.g. by walking a pointer
+  // through the register mirrors), it must not be treated as an error.
+  return ppu.io_latch.*;
 }
 
-fn put_addr(ppu: *PPU, addr: u8) {
-  if ppu.is_reading_lo.* {
-    ppu.addr_lo.* = addr;
-  } else {
-    ppu.addr_hi.* = addr;
+// palette ram index for addresses in the range 0x3f00-0x3fff.
+fn palette_index(addr: u16): u16 {
+  let index = addr & 0x1f;
+  // addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
+  // source: https://www.nesdev.org/wiki/PPU_palettes
+  if index == 0x10 || index == 0x14 || index == 0x18 || index == 0x1c {
+    index = index - 0x10;
   }
-  ppu.is_reading_lo.* = !ppu.is_reading_lo.*;
+  return index;
 }
 
 // When reading while the VRAM address is in the range 0–$3EFF (i.e., before the palettes), the read will return the
@@ -355,41 +512,23 @@ fn put_addr(ppu: *PPU, addr: u8) {
 // read this register to prime the pipeline and discard the result.
 // source: https://www.nesdev.org/wiki/PPU_registers#Address_($2006)_%3E%3E_write_x2
 fn read_data(ppu: *PPU): u8 {
-  let addr = get_addr(ppu);
-  inc_addr(ppu);
-
-  if addr >= 0x3000 && addr < 0x3f00 {
-    addr = addr - 0x2000;
-  }
+  let addr = ppu.v.* & 0x3fff;
+  increment_vram_addr(ppu);
 
   if addr < 0x2000 {
-    let data = ppu.data.*;
-    ppu.data.* = ppu.fn_read_chr.*(addr);
-    return data;
-  } else if addr < 0x3000 {
-    let data = ppu.data.*;
-    let addr = mirror_vram(ppu.mirroring.*, addr - 0x2000);
-    ppu.data.* = ppu.vram.*[addr].*;
+    let data = ppu.data_buffer.*;
+    ppu.data_buffer.* = ppu.fn_read_chr.*(addr);
     return data;
   } else if addr < 0x3f00 {
-    fmt::print_str("should be impossible")
-    wasm::trap();
-  } else if addr < 0x4000 {
-    // addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
-    // source: https://www.nesdev.org/wiki/PPU_palettes
-    if addr >= 0x3f20 {
-      addr = (addr - 0x3f00) % 0x20 + 0x3f00;
-    }
-    if addr == 0x3f10 || addr == 0x3f14 || addr == 0x3f18 || addr == 0x3f1c {
-      addr = addr - 0x10;
-    }
-    return ppu.palette.*[addr-0x3f00].*;
-  } else {
-    fmt::print_str("reading addr above 3f00\n")
-    wasm::trap();
+    let data = ppu.data_buffer.*;
+    ppu.data_buffer.* = ppu.vram.*[mirror_vram(ppu.mirroring.*, addr & 0x0fff)].*;
+    return data;
   }
 
-  return 0;
+  // palette reads are not buffered, but the buffer is still filled with the
+  // nametable byte that is "underneath" the palette.
+  ppu.data_buffer.* = ppu.vram.*[mirror_vram(ppu.mirroring.*, addr & 0x0fff)].*;
+  return ppu.palette.*[palette_index(addr)].*;
 }
 
 // Reference: https://www.nesdev.org/wiki/Mirroring
@@ -428,75 +567,278 @@ fn mirror_vram(mirroring: u8, index: u16): u16 {
 }
 
 fn write_data(ppu: *PPU, data: u8) {
-  let addr = get_addr(ppu);
-  // fmt::print_str("write data to ppu ");
-  // fmt::print_u16(addr);
-  // fmt::print_str(", data=");
-  // fmt::print_u8(data);
-  // fmt::print_str("\n");
-  inc_addr(ppu);
-
-  if addr >= 0x3000 && addr < 0x3f00 {
-    addr = addr - 0x2000;
-  }
+  let addr = ppu.v.* & 0x3fff;
+  increment_vram_addr(ppu);
 
   if addr < 0x2000 {
     ppu.fn_write_chr.*(addr, data);
-  } else if addr < 0x3000 {
-    let addr = mirror_vram(ppu.mirroring.*, addr - 0x2000);
-    ppu.vram.*[addr].* = data;
   } else if addr < 0x3f00 {
-    fmt::print_str("should be impossible\n");
-    wasm::trap();
-  } else if addr < 0x4000 {
-    // fmt::print_str("write to palettte addr=");
-    // fmt::print_u16(addr);
-    // fmt::print_str(",data=");
-    // fmt::print_u8(data);
-    // fmt::print_str("\n");
-
-    // addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
-    // source: https://www.nesdev.org/wiki/PPU_palettes
-    if addr >= 0x3f20 {
-      addr = (addr - 0x3f00) % 0x20 + 0x3f00;
-    }
-    if addr == 0x3f10 || addr == 0x3f14 || addr == 0x3f18 || addr == 0x3f1c {
-      addr = addr - 0x10;
-    }
-
-    ppu.palette.*[addr-0x3f00].* = data;
-    let color = get_color(data);
-    ppu.debug.palette_framebuffer.*[addr-0x3f00].* = color;
+    ppu.vram.*[mirror_vram(ppu.mirroring.*, addr & 0x0fff)].* = data;
   } else {
-    fmt::print_str("writing addr above 0x4000\n")
-    wasm::trap();
+    let index = palette_index(addr);
+    ppu.palette.*[index].* = data;
+    ppu.debug.palette_framebuffer.*[index].* = get_color(data);
   }
 }
 
-fn inc_addr(ppu: *PPU) {
-  let increment: u8 = 1;
+fn increment_vram_addr(ppu: *PPU) {
+  let scanline = ppu.scanline.*;
+  if is_rendering_enabled(ppu) && (scanline < SCANLINE_POST_RENDER || scanline == SCANLINE_PRE_RENDER) {
+    // accessing $2007 while rendering triggers both the coarse x and the y
+    // increment instead of the normal increment.
+    increment_x(ppu);
+    increment_y(ppu);
+    return;
+  }
+
+  let increment: u16 = 1;
   if (ppu.reg.control.* & CONTROL_FLAG_VRAM_ADD) != 0 {
     increment = 32;
   }
-
-  let lo = ppu.addr_lo.*;
-  ppu.addr_lo.* = lo + increment;
-  if lo > ppu.addr_lo.* {
-    ppu.addr_hi.* = ppu.addr_hi.* + 1;
-  }
-}
-
-fn get_addr(ppu: *PPU): u16 {
-  let addr = (ppu.addr_hi.* as u16 << 8) | (ppu.addr_lo.* as u16);
-  if addr >= 0x4000 {
-    addr = addr & 0x3fff;
-  }
-  return addr;
+  ppu.v.* = (ppu.v.* + increment) & 0x7fff;
 }
 
 fn write_oam(ppu: *PPU, data: u8) {
   ppu.oam.*[ppu.oam_addr.*].* = data;
   ppu.oam_addr.* = ppu.oam_addr.* + 1;
+}
+
+// Rasterize scanline y into the back framebuffer using the current state of
+// the PPU registers, and compute at which dot sprite 0 hit happens (if any).
+fn render_scanline(ppu: *PPU, y: i32) {
+  let mask = ppu.reg.mask.*;
+  let show_background = (mask & MASK_FLAG_BACKGROUND) != 0;
+  let show_sprites = (mask & MASK_FLAG_SPRITE) != 0;
+  let show_background_left = (mask & MASK_FLAG_BACKGROUND_LEFTMOST) != 0;
+  let show_sprites_left = (mask & MASK_FLAG_SPRITE_LEFTMOST) != 0;
+  let greyscale = (mask & MASK_FLAG_GREYSCALE) != 0;
+  let line = ppu.back_framebuffer.*[y * 256] as [*]Color;
+
+  if !show_background && !show_sprites {
+    // Rendering is disabled: the screen shows the backdrop color, or the
+    // palette entry that v points to when v is inside the palette range.
+    let color_idx = ppu.palette.*[0].*;
+    if (ppu.v.* & 0x3f00) == 0x3f00 {
+      color_idx = ppu.palette.*[palette_index(ppu.v.*)].*;
+    }
+    if greyscale {
+      color_idx = color_idx & 0x30;
+    }
+    let color = get_color(color_idx);
+    let x: i32 = 0;
+    while x < 256 {
+      line[x].* = color;
+      x = x + 1;
+    }
+    return;
+  }
+
+  render_background_line(ppu);
+  render_sprite_line(ppu, y);
+
+  let bg_pixel = ppu.bg_pixel.*;
+  let bg_pal = ppu.bg_pal.*;
+  let spr_pixel = ppu.spr_pixel.*;
+  let spr_pal = ppu.spr_pal.*;
+  let spr_flags = ppu.spr_flags.*;
+  let hit_dot: i32 = -1;
+
+  let x: i32 = 0;
+  while x < 256 {
+    let bg: u8 = 0;
+    if show_background && (show_background_left || x >= 8) {
+      bg = bg_pixel[x].*;
+    }
+    let sp: u8 = 0;
+    if show_sprites && (show_sprites_left || x >= 8) {
+      sp = spr_pixel[x].*;
+    }
+
+    let color_idx: u8 = ppu.palette.*[0].*;
+    if sp != 0 {
+      let flags = spr_flags[x].*;
+      if bg != 0 && (flags & SPR_FLAG_SPRITE_0) != 0 && x != 255 && hit_dot < 0 {
+        hit_dot = x + 2;
+      }
+      if bg == 0 || (flags & SPR_FLAG_BEHIND_BACKGROUND) == 0 {
+        color_idx = ppu.palette.*[0x10 + spr_pal[x].* * 4 + sp].*;
+      } else {
+        color_idx = ppu.palette.*[bg_pal[x].* * 4 + bg].*;
+      }
+    } else if bg != 0 {
+      color_idx = ppu.palette.*[bg_pal[x].* * 4 + bg].*;
+    }
+
+    if greyscale {
+      color_idx = color_idx & 0x30;
+    }
+    line[x].* = get_color(color_idx);
+    x = x + 1;
+  }
+
+  if (ppu.reg.status.* & STATUS_FLAG_ZERO_HIT) == 0 {
+    ppu.sprite0_hit_dot.* = hit_dot;
+  }
+}
+
+// Fills bg_pixel/bg_pal with the background of the current scanline using v
+// and fine x. This mimics the 33 tile fetches the PPU does per scanline.
+fn render_background_line(ppu: *PPU) {
+  let bg_pixel = ppu.bg_pixel.*;
+  let bg_pal = ppu.bg_pal.*;
+
+  let v = ppu.v.*;
+  let coarse_x = v & 0x001f;
+  let coarse_y = (v >> 5) & 0x001f;
+  let nametable = (v >> 10) & 0x0003;
+  let fine_y = (v >> 12) & 0x0007;
+
+  let pattern_addr: u16 = 0;
+  if (ppu.reg.control.* & CONTROL_FLAG_BACKGROUND_PATTERN_ADDR) != 0 {
+    pattern_addr = 0x1000;
+  }
+
+  let x_out: i32 = -((ppu.x.* as u32) as i32);
+  let tile_i = 0;
+  while tile_i < 33 {
+    let tile_addr = (nametable << 10) | (coarse_y << 5) | coarse_x;
+    let tile_id = ppu.vram.*[mirror_vram(ppu.mirroring.*, tile_addr)].* as u16;
+
+    let attribute_addr = 0x03c0 | (nametable << 10) | ((coarse_y >> 2) << 3) | (coarse_x >> 2);
+    let attribute_byte = ppu.vram.*[mirror_vram(ppu.mirroring.*, attribute_addr)].*;
+    let attribute_shift = (((coarse_y & 2) << 1) | (coarse_x & 2)) as u8;
+    let palette_id = (attribute_byte >> attribute_shift) & 0x03;
+
+    let chr_offset = pattern_addr + tile_id * 16 + fine_y;
+    let lo = ppu.fn_read_chr.*(chr_offset);
+    let hi = ppu.fn_read_chr.*(chr_offset + 8);
+
+    let px: u8 = 0;
+    while px < 8 {
+      let x = x_out + ((px as u32) as i32);
+      if x >= 0 && x < 256 {
+        let bit = 7 - px;
+        let color = ((lo >> bit) & 1) | (((hi >> bit) & 1) << 1);
+        bg_pixel[x].* = color;
+        bg_pal[x].* = palette_id;
+      }
+      px = px + 1;
+    }
+    x_out = x_out + 8;
+
+    // coarse x increment with horizontal nametable switch
+    if coarse_x == 31 {
+      coarse_x = 0;
+      nametable = nametable ^ 0x0001;
+    } else {
+      coarse_x = coarse_x + 1;
+    }
+
+    tile_i = tile_i + 1;
+  }
+}
+
+// Evaluates the sprites that are visible on scanline y (at most 8, like the
+// hardware) and fills spr_pixel/spr_pal/spr_flags with them. Lower OAM
+// indexes have priority.
+fn render_sprite_line(ppu: *PPU, y: i32) {
+  let spr_pixel = ppu.spr_pixel.*;
+  let spr_pal = ppu.spr_pal.*;
+  let spr_flags = ppu.spr_flags.*;
+
+  let x = 0;
+  while x < 256 {
+    spr_pixel[x].* = 0;
+    x = x + 1;
+  }
+
+  let height: i32 = 8;
+  let is_8x16 = (ppu.reg.control.* & CONTROL_FLAG_SPRITE_SIZE) != 0;
+  if is_8x16 {
+    height = 16;
+  }
+  let pattern_addr: u16 = 0;
+  if (ppu.reg.control.* & CONTROL_FLAG_SPRITE_PATTERN_ADDR) != 0 {
+    pattern_addr = 0x1000;
+  }
+
+  let count = 0;
+  let i = 0;
+  while i < 64 {
+    let sprite_y = (ppu.oam.*[i*4 + 0].* as u32) as i32;
+    // sprites are drawn one scanline below their OAM y coordinate.
+    let row = y - (sprite_y + 1);
+    if row < 0 || row >= height {
+      i = i + 1;
+      continue;
+    }
+
+    if count == 8 {
+      ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_SPRITE_OVERFLOW;
+      break;
+    }
+    count = count + 1;
+
+    let tile_id = ppu.oam.*[i*4 + 1].* as u16;
+    let attributes = ppu.oam.*[i*4 + 2].*;
+    let sprite_x = (ppu.oam.*[i*4 + 3].* as u32) as i32;
+
+    let palette_id = attributes & 0x03;
+    let flags: u8 = 0;
+    if (attributes & 0b0010_0000) != 0 {
+      flags = flags | SPR_FLAG_BEHIND_BACKGROUND;
+    }
+    if i == 0 {
+      flags = flags | SPR_FLAG_SPRITE_0;
+    }
+    let flip_horizontal = (attributes & 0b0100_0000) != 0;
+    let flip_vertical = (attributes & 0b1000_0000) != 0;
+
+    if flip_vertical {
+      row = height - 1 - row;
+    }
+
+    let chr_offset: u16 = 0;
+    if is_8x16 {
+      let bank = (tile_id & 0x0001) * 0x1000;
+      let tile = tile_id & 0x00fe;
+      if row >= 8 {
+        tile = tile + 1;
+        row = row - 8;
+      }
+      chr_offset = bank + tile * 16 + row as u16;
+    } else {
+      chr_offset = pattern_addr + tile_id * 16 + row as u16;
+    }
+    let lo = ppu.fn_read_chr.*(chr_offset);
+    let hi = ppu.fn_read_chr.*(chr_offset + 8);
+
+    let px: u8 = 0;
+    while px < 8 {
+      let bit = 7 - px;
+      if flip_horizontal {
+        bit = px;
+      }
+      let color = ((lo >> bit) & 1) | (((hi >> bit) & 1) << 1);
+      let screen_x = sprite_x + ((px as u32) as i32);
+      if color != 0 && screen_x < 256 && spr_pixel[screen_x].* == 0 {
+        spr_pixel[screen_x].* = color;
+        spr_pal[screen_x].* = palette_id;
+        spr_flags[screen_x].* = flags;
+      }
+      px = px + 1;
+    }
+
+    i = i + 1;
+  }
+}
+
+fn get_screen_framebuffer(ppu: *PPU): Image {
+  return Image{
+    framebuffer: ppu.screen_framebuffer.*,
+    width:       32*8,
+    height:      30*8,
+  };
 }
 
 struct Color {
@@ -681,188 +1023,44 @@ fn get_debug_palette_framebuffer(ppu: *PPU): DebugPalette {
       framebuffer: ppu.debug.palette_framebuffer.*[1] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     background_palette1: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[5] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     background_palette2: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[9] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     background_palette3: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[13] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
 
     sprite_palette0: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[17] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     sprite_palette1: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[21] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     sprite_palette2: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[25] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     sprite_palette3: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[29] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
   };
-}
-
-fn render_background(ppu: *PPU, y: i32): bool {
-  let scroll_x = (ppu.scroll_x.* as u32) as i32;
-  let scroll_y = (ppu.scroll_y.* as u32) as i32;
-
-  let name_a: u16 = 0;
-  let name_b: u16 = 1;
-  let name_c: u16 = 2;
-  let name_d: u16 = 3;
-
-  let selected_nametable: u8 = (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_1) | (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_2);
-  let selected_nametable: u16 = selected_nametable as u16;
-
-  name_a = selected_nametable;
-  if selected_nametable == 0 {
-    name_b = 1; name_c = 2; name_d = 3;
-  } else if selected_nametable == 1 {
-    name_b = 0; name_c = 3; name_d = 2;
-  } else if selected_nametable == 2 {
-    name_b = 3; name_c = 0; name_d = 1;
-  } else {
-    name_b = 2; name_c = 1; name_d = 0;
-  }
-
-  let pattern_addr: u16 = 0;
-  if (ppu.reg.control.* & CONTROL_FLAG_BACKGROUND_PATTERN_ADDR) != 0 {
-    pattern_addr = 0x1000;
-  }
-
-  let sprite0_x = ppu.oam.*[3].* as i32;
-  let sprite0_y = ppu.oam.*[0].* as i32 + 1;
-  let sprite0_tile_id = ppu.oam.*[1].* as u16;
-  let sprite0_y_offset = y - sprite0_y;
-  let sprite0_x_color: [*]u8 = mem::alloc_array::<u8>(8);
-  sprite0_x_color[0].* = 0;
-  sprite0_x_color[1].* = 0;
-  sprite0_x_color[2].* = 0;
-  sprite0_x_color[3].* = 0;
-  sprite0_x_color[4].* = 0;
-  sprite0_x_color[5].* = 0;
-  sprite0_x_color[6].* = 0;
-  sprite0_x_color[7].* = 0;
-  if sprite0_y < 0xef && sprite0_y_offset >= 0 && sprite0_y_offset < 8 {
-    let sprite_pattern_addr: u16 = 0;
-    if (ppu.reg.control.* & CONTROL_FLAG_SPRITE_PATTERN_ADDR) != 0 {
-      sprite_pattern_addr = 0x1000;
-    }
-    let sprite_chr_offset = sprite_pattern_addr + sprite0_tile_id * 16;
-    let sprite0_hi = ppu.fn_read_chr.*(sprite_chr_offset + sprite0_y_offset as u16);
-    let sprite0_lo = ppu.fn_read_chr.*(sprite_chr_offset + sprite0_y_offset as u16 + 8);
-    sprite0_x_color[7].* = ((sprite0_lo & 0b0000_0001) << 1) |  (sprite0_hi & 0b0000_0001);
-    sprite0_x_color[6].* =  (sprite0_lo & 0b0000_0010)       | ((sprite0_hi & 0b0000_0010) >> 1);
-    sprite0_x_color[5].* = ((sprite0_lo & 0b0000_0100) >> 1) | ((sprite0_hi & 0b0000_0100) >> 2);
-    sprite0_x_color[4].* = ((sprite0_lo & 0b0000_1000) >> 2) | ((sprite0_hi & 0b0000_1000) >> 3);
-    sprite0_x_color[3].* = ((sprite0_lo & 0b0001_0000) >> 3) | ((sprite0_hi & 0b0001_0000) >> 4);
-    sprite0_x_color[2].* = ((sprite0_lo & 0b0010_0000) >> 4) | ((sprite0_hi & 0b0010_0000) >> 5);
-    sprite0_x_color[1].* = ((sprite0_lo & 0b0100_0000) >> 5) | ((sprite0_hi & 0b0100_0000) >> 6);
-    sprite0_x_color[0].* = ((sprite0_lo & 0b1000_0000) >> 6) | ((sprite0_hi & 0b1000_0000) >> 7);
-  }
-  let touch_sprite_0 = false;
-
-  let x: i32 = 0;
-  while x < 256 {
-    // region represent which nametable does pixel (x, y) fall into.
-    // 0 means: it falls into the main nametable.
-    // 1 means: it falls into the nametable in the right side of the main nametable.
-    // 2 means: it falls into the nametable in the bottom side of the main nametable.
-    // 3 means: it falls into the nametable in the bottom-right side of the main nametable.
-    // here is the illustration:
-    // [0][1]
-    // [2][3]
-    let region: u8 = 0;
-    if (scroll_x + x) >= 256 {
-      region = region + 1;
-    }
-    if (scroll_y + y) >= 240 {
-      region = region + 2;
-    }
-
-    let x_relative_to_nametable = (scroll_x + x) % 256;
-    let y_relative_to_nametable = (scroll_y + y) % 240;
-    let tile_id_x = x_relative_to_nametable / 8;
-    let tile_id_y = y_relative_to_nametable / 8;
-    let tile_id = tile_id_y * 32 + tile_id_x;
-    let tile_y = (y_relative_to_nametable % 8) as u8;
-    let tile_x = (x_relative_to_nametable % 8) as u8;
-
-    let vram_offset: u16 = 0;
-    if region == 0 {
-      vram_offset = name_a as u16 * 0x400;
-    } else if region == 1 {
-      vram_offset = name_b as u16 * 0x400;
-    } else if region == 2 {
-      vram_offset = name_c as u16 * 0x400;
-    } else {
-      vram_offset = name_d as u16 * 0x400;
-    }
-
-    let nametable = ppu.vram.*[mirror_vram(ppu.mirroring.*, vram_offset)] as [*]u8;
-    let attribute_byte_offset = (tile_id_y / 4) * 8 + (tile_id_x / 4);
-    let attribute_byte = nametable[32 * 30 + attribute_byte_offset as isize].*;
-    let attr_y = (tile_id_y % 4) / 2;
-    let attr_x = (tile_id_x % 4) / 2;
-    let palette_id: u8 = 0;
-    if attr_y == 0 && attr_x == 0 {
-      palette_id = (attribute_byte >> 0) & 0b11;
-    } else if attr_y == 0 && attr_x == 1 {
-      palette_id = (attribute_byte >> 2) & 0b11;
-    } else if attr_y == 1 && attr_x == 0 {
-      palette_id = (attribute_byte >> 4) & 0b11;
-    } else if attr_y == 1 && attr_x == 1 {
-      palette_id = (attribute_byte >> 6) & 0b11;
-    }
-
-    let tile_id = nametable[tile_id].*;
-    let chr_offset = pattern_addr + tile_id as u16 * 16;
-    let hi = ppu.fn_read_chr.*(chr_offset + tile_y as u16);
-    let lo = ppu.fn_read_chr.*(chr_offset + tile_y as u16 + 8);
-    let msb: u8 = 0;
-    if (tile_x == 7 && (lo & 1) != 0) || (lo & (0b1000_0000 as u8 >> tile_x)) != 0 {
-      msb = 1;
-    }
-    let lsb: u8 = 0;
-    if (hi & (0b1000_0000 >> tile_x)) != 0 {
-      lsb = 1;
-    }
-    let color_offset = (msb << 1) | lsb;
-
-    if (x - sprite0_x) >= 0 && (x - sprite0_x) < 8  {
-      let sprite_color = sprite0_x_color[x - sprite0_x].*;
-      if sprite_color != 0 {
-        touch_sprite_0 = true;
-      }
-    }
-
-    set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[y*256+x], color_offset);
-    ppu.background_mask.*[y*256+x].* = color_offset;
-
-    x = x + 1;
-  }
-
-  mem::dealloc_array::<u8>(sprite0_x_color);
-  return touch_sprite_0;
 }
 
 fn set_background_color(ppu: *PPU, palette_id: u8, pixel: *Color, color_offset: u8) {
@@ -873,14 +1071,6 @@ fn set_background_color(ppu: *PPU, palette_id: u8, pixel: *Color, color_offset: 
     color_idx = ppu.palette.*[palette_id * 4 + color_offset].*;
   }
   pixel.* = palette[color_idx].*;
-}
-
-fn get_screen_framebuffer(ppu: *PPU): Image {
-  return Image{
-    framebuffer: ppu.screen_framebuffer.*,
-    width:       32*8,
-    height:      30*8,
-  };
 }
 
 fn render_nametable(ppu: *PPU, nametable: u8, framebuffer: [*]Color) {
@@ -982,115 +1172,4 @@ fn get_nametable_4_framebuffer(ppu: *PPU): Image {
     width:       32*8,
     height:      30*8,
   };
-}
-
-fn render_objects(ppu: *PPU) {
-  if (ppu.reg.mask.* & MASK_FLAG_SPRITE) == 0 {
-    return;
-  }
-
-  let render_left = (ppu.reg.mask.* & MASK_FLAG_SPRITE_LEFTMOST) != 0;
-
-  let i = 63 * 4;
-  while i >= 0 {
-    let byte0 = ppu.oam.*[i+0].*;
-    let byte1 = ppu.oam.*[i+1].*;
-    let byte2 = ppu.oam.*[i+2].*;
-    let byte3 = ppu.oam.*[i+3].*;
-
-    let y = byte0;
-    let x = byte3;
-    let tile_id = byte1 as u16;
-
-    if y >= 0xef {
-      i = i - 4;
-      continue;
-    }
-
-    y = y + 1;
-
-    if !render_left && x < 8 {
-      i = i - 4;
-      continue;
-    }
-
-    // fmt::print_str("render object x=");
-    // fmt::print_i32(x as i32);
-    // fmt::print_str(" y=");
-    // fmt::print_i32(y as i32);
-    // fmt::print_str(" tile_id=");
-    // fmt::print_u16(tile_id);
-    // fmt::print_str("\n");
-
-    let pattern_addr: u16 = 0;
-    if (ppu.reg.control.* & CONTROL_FLAG_SPRITE_PATTERN_ADDR) != 0 {
-      pattern_addr = 0x1000;
-    }
-
-    let palette_id = byte2 & 0b11;
-    let behind_background = (byte2 & 0b0010_0000) != 0;
-    let flip_vertical = (byte2 & 0b1000_0000) != 0;
-    let flip_horizontal = (byte2 & 0b0100_0000) != 0;
-
-    let chr_offset = pattern_addr + tile_id * 16;
-
-    let y_offset: u16 = 0;
-    while y_offset < 8 {
-      let hi = ppu.fn_read_chr.*(chr_offset + y_offset);
-      let lo = ppu.fn_read_chr.*(chr_offset + y_offset + 8);
-
-      let x7 = ((lo & 0b0000_0001) << 1) |  (hi & 0b0000_0001);
-      let x6 =  (lo & 0b0000_0010)       | ((hi & 0b0000_0010) >> 1);
-      let x5 = ((lo & 0b0000_0100) >> 1) | ((hi & 0b0000_0100) >> 2);
-      let x4 = ((lo & 0b0000_1000) >> 2) | ((hi & 0b0000_1000) >> 3);
-      let x3 = ((lo & 0b0001_0000) >> 3) | ((hi & 0b0001_0000) >> 4);
-      let x2 = ((lo & 0b0010_0000) >> 4) | ((hi & 0b0010_0000) >> 5);
-      let x1 = ((lo & 0b0100_0000) >> 5) | ((hi & 0b0100_0000) >> 6);
-      let x0 = ((lo & 0b1000_0000) >> 6) | ((hi & 0b1000_0000) >> 7);
-
-      let y_final = y as u16 + y_offset;
-      if flip_vertical {
-        y_final = y as u16 + 7 - y_offset;
-      }
-
-      let framebuffer_offset = y_final * 32 * 8 + x as u16;
-
-      if flip_horizontal {
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 0, x7);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 1, x6);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 2, x5);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 3, x4);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 4, x3);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 5, x2);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 6, x1);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 7, x0);
-      } else {
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 0, x0);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 1, x1);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 2, x2);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 3, x3);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 4, x4);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 5, x5);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 6, x6);
-        set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 7, x7);
-      }
-
-      y_offset = y_offset + 1;
-    }
-
-    i = i - 4;
-  }
-}
-
-fn set_sprite_color(ppu: *PPU, behind_background: bool, palette_id: u8, fb_offset: u16, color_offset: u8) {
-  if color_offset == 0 {
-    return;
-  }
-
-  if behind_background && (ppu.background_mask.*[fb_offset].* != 0) {
-    return;
-  }
-
-  let color_idx = ppu.palette.*[(palette_id+4) * 4 + color_offset].*;
-  ppu.screen_framebuffer.*[fb_offset].* = palette[color_idx].*;
 }

@@ -40,17 +40,20 @@ window.onload = async function() {
 
   const resp = await fetch('/nes.wasm')
   const bytes = await resp.arrayBuffer()
-  let memoryBuffer;
+  let wasmMemory = null;
+  // Always go through wasmMemory.buffer: the ArrayBuffer object is replaced
+  // (and the old one detached) whenever the wasm memory grows.
+  const memoryBuffer = () => wasmMemory.buffer;
   let debuggingBuffer = "";
   const module = await WebAssembly.instantiate(bytes, {
     wasi_snapshot_preview1: {
       fd_write: (fd, iovec, count, result) => {
         for (let i = 0; i < count; i++) {
-          const buff = new Uint32Array(memoryBuffer, iovec + 2*i, 2);
+          const buff = new Uint32Array(memoryBuffer(), iovec + 8*i, 2);
           const p = buff[0]
           const len = buff[1]
 
-          const stringBytes = new Uint8Array(memoryBuffer, p, len);
+          const stringBytes = new Uint8Array(memoryBuffer(), p, len);
           const text = new TextDecoder().decode(stringBytes);
           debuggingBuffer += text
           const x = debuggingBuffer.indexOf("\n");
@@ -78,7 +81,7 @@ window.onload = async function() {
     keydownJoypad1A, keydownJoypad1B, keydownJoypad1Select, keydownJoypad1Start, keydownJoypad1Up, keydownJoypad1Down, keydownJoypad1Left, keydownJoypad1Right,
     keyupJoypad1A, keyupJoypad1B, keyupJoypad1Select, keyupJoypad1Start, keyupJoypad1Up, keyupJoypad1Down, keyupJoypad1Left, keyupJoypad1Right,
   } = module.instance.exports;
-  memoryBuffer = memory.buffer
+  wasmMemory = memory
 
   window.setPalette = function(id) {
     setDebugPaletteId(id)
@@ -133,19 +136,19 @@ window.onload = async function() {
   });
 
   function getString(offset) {
-    const buff = new Uint8Array(memoryBuffer);
+    const buff = new Uint8Array(memoryBuffer());
     let length = 0;
     while (buff[offset + length] !== 0) {
       length++;
     }
-    const stringBytes = new Uint8Array(memoryBuffer, offset, length);
+    const stringBytes = new Uint8Array(memoryBuffer(), offset, length);
     const text = new TextDecoder().decode(stringBytes);
     return text
   }
 
   function renderToCanvas(theCanvas, ctx, image) {
     const [framebuffer, width, height] = image;
-    const pixels = new Uint8ClampedArray(memoryBuffer, framebuffer, width*height*4);
+    const pixels = new Uint8ClampedArray(memoryBuffer(), framebuffer, width*height*4);
     const imageData = new ImageData(pixels, width, height);
 
     theCanvas.width = width;
@@ -209,7 +212,7 @@ window.onload = async function() {
       }
 
       const offset = getRom()
-      const target = new Uint8Array(memoryBuffer)
+      const target = new Uint8Array(memoryBuffer())
       target.set(byteArray, offset)
 
       const [resultIsValid, resultError] = loadRom();

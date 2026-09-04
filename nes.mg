@@ -13,24 +13,46 @@ fn main() {
 
 let remaining_elapsed_nanosecond: i64 = 0;
 let cycle_rate: i64 = 1_789_773; // cycles per second
-let cycle_period: i64 = 1_000_000_000 / cycle_rate;
+// Never try to catch up more than ~2 frames worth of emulation in a single
+// tick (e.g. after the browser tab was in the background).
+let max_elapsed_nanosecond: i64 = 33_366_667;
+
 @wasm_export("tick")
 fn tick(elapsed_ns: i64) {
   remaining_elapsed_nanosecond = remaining_elapsed_nanosecond + elapsed_ns;
-  if remaining_elapsed_nanosecond > 16_000_000 {
-    remaining_elapsed_nanosecond = 16_000_000;
+  if remaining_elapsed_nanosecond > max_elapsed_nanosecond {
+    remaining_elapsed_nanosecond = max_elapsed_nanosecond;
   }
 
-  let cpu_cycle = remaining_elapsed_nanosecond / cycle_period;
-
-  while cpu_cycle > 0 {
-    let cycle = cpu::tick(bus::the_cpu) as i64;
-    ppu::tick(bus::the_ppu, cycle*3);
-    cpu_cycle = cpu_cycle - cycle;
+  let cpu_cycle_budget = remaining_elapsed_nanosecond * cycle_rate / 1_000_000_000;
+  let executed_cycle: i64 = 0;
+  while executed_cycle < cpu_cycle_budget {
+    executed_cycle = executed_cycle + step();
   }
 
-  remaining_elapsed_nanosecond = cpu_cycle;
+  // keep the time that is not emulated yet for the next tick.
+  remaining_elapsed_nanosecond = remaining_elapsed_nanosecond - executed_cycle * 1_000_000_000 / cycle_rate;
 
+  ppu::render(bus::the_ppu);
+}
+
+// Executes a single CPU instruction and advances the PPU accordingly.
+// Returns the number of CPU cycles spent.
+fn step(): i64 {
+  let cycle = cpu::tick(bus::the_cpu) as i64;
+  cycle = cycle + bus::take_dma_stall_cycles();
+  ppu::tick(bus::the_ppu, cycle*3);
+  return cycle;
+}
+
+// Runs the emulator until the PPU finishes the current frame. Useful for
+// deterministic (frame exact) execution, e.g. for tests.
+@wasm_export("runFrame")
+fn run_frame() {
+  let start = bus::the_ppu.frame.*;
+  while bus::the_ppu.frame.* == start {
+    step();
+  }
   ppu::render(bus::the_ppu);
 }
 

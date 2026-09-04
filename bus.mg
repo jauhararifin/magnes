@@ -10,6 +10,10 @@ let the_cpu: *cpu::CPU = cpu::new();
 let the_ppu: *ppu::PPU = ppu::new();
 let the_rom: *rom::ROM = mem::alloc::<rom::ROM>();
 let ram: [*]u8 = mem::alloc_array::<u8>(0x2000);
+// cartridge work ram (PRG RAM) mapped at 0x6000-0x7fff.
+let prg_ram: [*]u8 = mem::alloc_array::<u8>(0x2000);
+// extra CPU cycles caused by OAM DMA, consumed by the main loop through take_dma_stall_cycles.
+let dma_stall_cycles: i64 = 0;
 let debug: bool = false;
 let joypad_1: *joypad::Joypad = joypad::new();
 let joypad_2: *joypad::Joypad = joypad::new();
@@ -21,7 +25,7 @@ fn init() {
     send_non_maskable_interrupt,
     read_chr_rom,
     write_chr_rom,
-  )
+  );
 }
 
 fn send_non_maskable_interrupt() {
@@ -40,8 +44,17 @@ fn reset() {
   let i = 0;
   while i < 0x2000 {
     ram[i].* = 0;
+    prg_ram[i].* = 0;
     i = i + 1;
   }
+  dma_stall_cycles = 0;
+}
+
+// Returns the CPU cycles the CPU was stalled by DMA since the last call.
+fn take_dma_stall_cycles(): i64 {
+  let cycles = dma_stall_cycles;
+  dma_stall_cycles = 0;
+  return cycles;
 }
 
 fn read(addr: u16): u8 {
@@ -64,6 +77,8 @@ fn read(addr: u16): u8 {
     return joypad::read(joypad_1);
   } else if addr == 0x4017 {
     return joypad::read(joypad_2);
+  } else if addr >= 0x6000 && addr < 0x8000 {
+    return prg_ram[addr - 0x6000].*;
   } else if addr >= 0x8000 {
     let addr = addr - 0x8000;
     return rom::read_program(the_rom, addr);
@@ -106,10 +121,13 @@ fn write(addr: u16, data: u8) {
       ppu::write_oam(the_ppu, b);
       i = i + 1;
     }
+    dma_stall_cycles = dma_stall_cycles + ppu::OAM_DMA_CPU_CYCLES;
   } else if addr == 0x4016 {
     joypad::write(joypad_1, data);
   } else if addr == 0x4017 {
     joypad::write(joypad_2, data);
+  } else if addr >= 0x6000 && addr < 0x8000 {
+    prg_ram[addr - 0x6000].* = data;
   } else if addr >= 0x8000 {
     let addr = addr - 0x8000;
     return rom::write_program(the_rom, addr, data);

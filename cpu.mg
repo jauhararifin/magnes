@@ -616,7 +616,7 @@ fn execute_next_instruction(cpu: *CPU): i32 {
     cpu.pc.* = cpu.pc.* + 1;
     let lo = cpu.fn_read.*(ptr as u16);
     let hi = cpu.fn_read.*(((ptr+1) & 0xff) as u16);
-    addr = (hi as u16 << 8) | (lo as u16)
+    addr = (hi as u16 << 8) | (lo as u16);
     if debug {
       fmt::print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
