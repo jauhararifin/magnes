@@ -16,7 +16,7 @@ let cycle_rate: i64 = 1_789_773; // cycles per second
 let cycle_period: i64 = 1_000_000_000 / cycle_rate;
 @wasm_export("tick")
 fn tick(elapsed_ns: i64) {
-  remaining_elapsed_nanosecond = remaining_elapsed_nanosecond + elapsed_ns;
+  remaining_elapsed_nanosecond += elapsed_ns;
   if remaining_elapsed_nanosecond > 16_000_000 {
     remaining_elapsed_nanosecond = 16_000_000;
   }
@@ -26,7 +26,7 @@ fn tick(elapsed_ns: i64) {
   while cpu_cycle > 0 {
     let cycle = cpu::tick(bus::the_cpu) as i64;
     ppu::tick(bus::the_ppu, cycle*3);
-    cpu_cycle = cpu_cycle - cycle;
+    cpu_cycle -= cycle;
   }
 
   remaining_elapsed_nanosecond = cpu_cycle;

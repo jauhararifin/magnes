@@ -173,34 +173,26 @@ fn reset(ppu: *PPU) {
   ppu.cycles.*        = 0;
 
   // vram,palette,oam,screenframebuffer
-  let i = 0;
-  while i < 0x800 {
+  for let i = 0; i < 0x800; i += 1 {
     ppu.vram.*[i].* = 0;
-    i = i + 1;
   }
 
-  let i = 0;
-  while i < 0x20 {
+  for let i = 0; i < 0x20; i += 1 {
     ppu.palette.*[i].* = 0;
-    i = i + 1;
   }
 
-  let i = 0;
-  while i < 64*4 {
+  for let i = 0; i < 64*4; i += 1 {
     ppu.oam.*[i].* = 0;
-    i = i + 1;
   }
 
-  let i = 0;
-  while i < 256 * 240 {
+  for let i = 0; i < 256 * 240; i += 1 {
     ppu.screen_framebuffer.*[i].* = Color{r:0,g:0,b:0,a:0};
     ppu.background_mask.*[i].* = 0;
-    i = i + 1;
   }
 }
 
 fn tick(ppu: *PPU, cycles: i64) {
-  ppu.cycles.* = ppu.cycles.* + cycles as i32;
+  ppu.cycles.* += cycles as i32;
 
   while ppu.cycles.* >= 341 {
     // fmt::print_str("scanline=");
@@ -234,23 +226,23 @@ fn tick(ppu: *PPU, cycles: i64) {
       // fmt::print_str(",sprite0_y=");
       // fmt::print_u8(ppu.oam.*[0].*);
       // fmt::print_str("\n");
-      ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_ZERO_HIT;
+      ppu.reg.status.* |= STATUS_FLAG_ZERO_HIT;
     }
 
-    ppu.cycles.* = ppu.cycles.* - 341;
-    ppu.scanline.* = ppu.scanline.* + 1;
+    ppu.cycles.* -= 341;
+    ppu.scanline.* += 1;
 
     if ppu.scanline.* == 241 {
-      ppu.reg.status.* = ppu.reg.status.* | STATUS_FLAG_VBLANK_STARTED;
-      ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_ZERO_HIT;
+      ppu.reg.status.* |= STATUS_FLAG_VBLANK_STARTED;
+      ppu.reg.status.* &= ~STATUS_FLAG_ZERO_HIT;
       if (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0 {
         ppu.fn_trigger_non_maskable_interrupt.*();
       }
     }
     if ppu.scanline.* >= 262 {
       ppu.scanline.* = 0;
-      ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_ZERO_HIT;
-      ppu.reg.status.* = ppu.reg.status.* & ~STATUS_FLAG_VBLANK_STARTED;
+      ppu.reg.status.* &= ~STATUS_FLAG_ZERO_HIT;
+      ppu.reg.status.* &= ~STATUS_FLAG_VBLANK_STARTED;
     }
   }
 }
@@ -359,7 +351,7 @@ fn read_data(ppu: *PPU): u8 {
   inc_addr(ppu);
 
   if addr >= 0x3000 && addr < 0x3f00 {
-    addr = addr - 0x2000;
+    addr -= 0x2000;
   }
 
   if addr < 0x2000 {
@@ -372,7 +364,7 @@ fn read_data(ppu: *PPU): u8 {
     ppu.data.* = ppu.vram.*[addr].*;
     return data;
   } else if addr < 0x3f00 {
-    fmt::print_str("should be impossible")
+    fmt::print_str("should be impossible");
     wasm::trap();
   } else if addr < 0x4000 {
     // addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
@@ -381,11 +373,11 @@ fn read_data(ppu: *PPU): u8 {
       addr = (addr - 0x3f00) % 0x20 + 0x3f00;
     }
     if addr == 0x3f10 || addr == 0x3f14 || addr == 0x3f18 || addr == 0x3f1c {
-      addr = addr - 0x10;
+      addr -= 0x10;
     }
     return ppu.palette.*[addr-0x3f00].*;
   } else {
-    fmt::print_str("reading addr above 3f00\n")
+    fmt::print_str("reading addr above 3f00\n");
     wasm::trap();
   }
 
@@ -437,7 +429,7 @@ fn write_data(ppu: *PPU, data: u8) {
   inc_addr(ppu);
 
   if addr >= 0x3000 && addr < 0x3f00 {
-    addr = addr - 0x2000;
+    addr -= 0x2000;
   }
 
   if addr < 0x2000 {
@@ -461,14 +453,14 @@ fn write_data(ppu: *PPU, data: u8) {
       addr = (addr - 0x3f00) % 0x20 + 0x3f00;
     }
     if addr == 0x3f10 || addr == 0x3f14 || addr == 0x3f18 || addr == 0x3f1c {
-      addr = addr - 0x10;
+      addr -= 0x10;
     }
 
     ppu.palette.*[addr-0x3f00].* = data;
     let color = get_color(data);
     ppu.debug.palette_framebuffer.*[addr-0x3f00].* = color;
   } else {
-    fmt::print_str("writing addr above 0x4000\n")
+    fmt::print_str("writing addr above 0x4000\n");
     wasm::trap();
   }
 }
@@ -482,21 +474,21 @@ fn inc_addr(ppu: *PPU) {
   let lo = ppu.addr_lo.*;
   ppu.addr_lo.* = lo + increment;
   if lo > ppu.addr_lo.* {
-    ppu.addr_hi.* = ppu.addr_hi.* + 1;
+    ppu.addr_hi.* += 1;
   }
 }
 
 fn get_addr(ppu: *PPU): u16 {
   let addr = (ppu.addr_hi.* as u16 << 8) | (ppu.addr_lo.* as u16);
   if addr >= 0x4000 {
-    addr = addr & 0x3fff;
+    addr &= 0x3fff;
   }
   return addr;
 }
 
 fn write_oam(ppu: *PPU, data: u8) {
   ppu.oam.*[ppu.oam_addr.*].* = data;
-  ppu.oam_addr.* = ppu.oam_addr.* + 1;
+  ppu.oam_addr.* += 1;
 }
 
 struct Color {
@@ -595,16 +587,12 @@ fn get_debug_tile_framebuffer(ppu: *PPU): Image {
 }
 
 fn update_debug_chr_tile(ppu: *PPU) {
-  let yi: u16 = 0;
-  while yi < 16 {
-    let bank: u16 = 0;
-    while bank < 2 {
-      let xi: u16 = 0;
-      while xi < 16 {
+  for let yi: u16 = 0; yi < 16; yi += 1 {
+    for let bank: u16 = 0; bank < 2; bank += 1 {
+      for let xi: u16 = 0; xi < 16; xi += 1 {
         let chr_offset: u16 = yi*16*16 + xi*16 + bank * 0x1000;
 
-        let y: u16 = 0;
-        while y < 8 {
+        for let y: u16 = 0; y < 8; y += 1 {
           let hi = ppu.fn_read_chr.*(chr_offset + y);
           let lo = ppu.fn_read_chr.*(chr_offset + y + 8);
 
@@ -627,15 +615,9 @@ fn update_debug_chr_tile(ppu: *PPU) {
           set_debug_color(ppu, framebuffer[framebuffer_offset + 5], x5);
           set_debug_color(ppu, framebuffer[framebuffer_offset + 6], x6);
           set_debug_color(ppu, framebuffer[framebuffer_offset + 7], x7);
-
-          y = y + 1;
         }
-
-        xi = xi + 1;
       }
-      bank = bank + 1;
     }
-    yi = yi + 1;
   }
 }
 
@@ -754,6 +736,7 @@ fn render_background(ppu: *PPU, y: i32): bool {
   let sprite0_tile_id = ppu.oam.*[1].* as u16;
   let sprite0_y_offset = y - sprite0_y;
   let sprite0_x_color: [*]u8 = mem::alloc_array::<u8>(8);
+  defer mem::dealloc_array::<u8>(sprite0_x_color);
   sprite0_x_color[0].* = 0;
   sprite0_x_color[1].* = 0;
   sprite0_x_color[2].* = 0;
@@ -781,8 +764,7 @@ fn render_background(ppu: *PPU, y: i32): bool {
   }
   let touch_sprite_0 = false;
 
-  let x: i32 = 0;
-  while x < 256 {
+  for let x: i32 = 0; x < 256; x += 1 {
     // region represent which nametable does pixel (x, y) fall into.
     // 0 means: it falls into the main nametable.
     // 1 means: it falls into the nametable in the right side of the main nametable.
@@ -793,10 +775,10 @@ fn render_background(ppu: *PPU, y: i32): bool {
     // [2][3]
     let region: u8 = 0;
     if (scroll_x + x) >= 256 {
-      region = region + 1;
+      region += 1;
     }
     if (scroll_y + y) >= 240 {
-      region = region + 2;
+      region += 2;
     }
 
     let x_relative_to_nametable = (scroll_x + x) % 256;
@@ -857,11 +839,8 @@ fn render_background(ppu: *PPU, y: i32): bool {
 
     set_background_color(ppu, palette_id, ppu.screen_framebuffer.*[y*256+x], color_offset);
     ppu.background_mask.*[y*256+x].* = color_offset;
-
-    x = x + 1;
   }
 
-  mem::dealloc_array::<u8>(sprite0_x_color);
   return touch_sprite_0;
 }
 
@@ -893,10 +872,8 @@ fn render_nametable(ppu: *PPU, nametable: u8, framebuffer: [*]Color) {
     pattern_addr = 0x1000;
   }
 
-  let yi: u16 = 0;
-  while yi < 30 {
-    let xi: u16 = 0;
-    while xi < 32 {
+  for let yi: u16 = 0; yi < 30; yi += 1 {
+    for let xi: u16 = 0; xi < 32; xi += 1 {
       let vram_addr = nametable + (yi as u16) * 32 + (xi as u16);
       let tile_id = ppu.vram.*[vram_addr].* as u16;
       let chr_offset = pattern_addr + tile_id * 16;
@@ -916,13 +893,11 @@ fn render_nametable(ppu: *PPU, nametable: u8, framebuffer: [*]Color) {
         palette_id = (attribute_byte >> 6) & 0b11;
       }
 
-      let y: u16 = 0;
-      while y < 8 {
+      for let y: u16 = 0; y < 8; y += 1 {
         let hi = ppu.fn_read_chr.*(chr_offset + y);
         let lo = ppu.fn_read_chr.*(chr_offset + y + 8);
 
-        let x: u8 = 0;
-        while x < 8 {
+        for let x: u8 = 0; x < 8; x += 1 {
           let msb: u8 = 0;
           if (x == 7 && (lo & 1) != 0) || (lo & (0b1000_0000 >> x)) != 0 {
             msb = 1;
@@ -939,16 +914,9 @@ fn render_nametable(ppu: *PPU, nametable: u8, framebuffer: [*]Color) {
           let screen_x = xi as isize * 8 + x as isize;
           let framebuffer_offset = screen_y * 32 * 8 + screen_x;
           set_background_color(ppu, palette_id, framebuffer[framebuffer_offset], color_offset);
-
-          x = x + 1;
         }
-
-        y = y + 1;
       }
-
-      xi = xi + 1;
     }
-    yi = yi + 1;
   }
 }
 
@@ -991,8 +959,7 @@ fn render_objects(ppu: *PPU) {
 
   let render_left = (ppu.reg.mask.* & MASK_FLAG_SPRITE_LEFTMOST) != 0;
 
-  let i = 63 * 4;
-  while i >= 0 {
+  for let i = 63 * 4; i >= 0; i -= 4 {
     let byte0 = ppu.oam.*[i+0].*;
     let byte1 = ppu.oam.*[i+1].*;
     let byte2 = ppu.oam.*[i+2].*;
@@ -1003,14 +970,12 @@ fn render_objects(ppu: *PPU) {
     let tile_id = byte1 as u16;
 
     if y >= 0xef {
-      i = i - 4;
       continue;
     }
 
-    y = y + 1;
+    y += 1;
 
     if !render_left && x < 8 {
-      i = i - 4;
       continue;
     }
 
@@ -1034,8 +999,7 @@ fn render_objects(ppu: *PPU) {
 
     let chr_offset = pattern_addr + tile_id * 16;
 
-    let y_offset: u16 = 0;
-    while y_offset < 8 {
+    for let y_offset: u16 = 0; y_offset < 8; y_offset += 1 {
       let hi = ppu.fn_read_chr.*(chr_offset + y_offset);
       let lo = ppu.fn_read_chr.*(chr_offset + y_offset + 8);
 
@@ -1074,11 +1038,7 @@ fn render_objects(ppu: *PPU) {
         set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 6, x6);
         set_sprite_color(ppu, behind_background, palette_id, framebuffer_offset + 7, x7);
       }
-
-      y_offset = y_offset + 1;
     }
-
-    i = i - 4;
   }
 }
 

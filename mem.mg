@@ -53,13 +53,10 @@ let footer_size: usize = wasm::size_of::<Footer>();
 fn alloc_size(size: usize): usize {
   let padded_size = pad(size);
 
-  let curr = freelist_head as usize;
-  while curr != 0 {
-    let header = curr as *Header;
+  for let header = freelist_head; header as usize != 0; header = header.next.* as *Header {
     if header.size.* >= padded_size {
       return allocate_from_chunk(header, padded_size);
     }
-    curr = header.next.* as usize;
   }
 
   return allocate_from_new_page(size);
@@ -196,7 +193,7 @@ fn allocate_from_chunk(header: *Header, size: usize): usize {
   let remaining_space = header.size.* - padded_size;
   let has_additional_chunk = remaining_space >= padded_header + padded_footer + 8;
   if !has_additional_chunk {
-    padded_size = padded_size + remaining_space;
+    padded_size += remaining_space;
   }
 
   header.is_used.* = true;
@@ -271,7 +268,7 @@ fn allocate_from_new_page(size: usize): usize {
   let remaining_space = total_allocated - total_size;
   let has_additional_chunk = remaining_space >= padded_header + padded_footer + 8;
   if !has_additional_chunk {
-    padded_size = padded_size + remaining_space;
+    padded_size += remaining_space;
   }
 
   let header = p as *Header;

@@ -22,7 +22,7 @@ fn new(): *Joypad {
     strobe:   false,
     button_i: 0,
     status:   0,
-  }
+  };
   return p;
 }
 
@@ -31,7 +31,7 @@ fn reset(joypad: *Joypad) {
     strobe:   false,
     button_i: 0,
     status:   0,
-  }
+  };
 }
 
 fn write(joypad: *Joypad, data: u8) {
@@ -48,7 +48,7 @@ fn read(joypad: *Joypad): u8 {
 
   let result = (joypad.status.* >> joypad.button_i.*) & 1;
   if !joypad.strobe.* && joypad.button_i.* <= 7 {
-    joypad.button_i.* = joypad.button_i.* + 1;
+    joypad.button_i.* += 1;
   }
   if joypad.strobe.* {
     joypad.button_i.* = 0;
@@ -62,10 +62,10 @@ fn read(joypad: *Joypad): u8 {
 
 fn press(joypad: *Joypad, mask: u8) {
   // fmt::print_str("joypad pressed, staus="); fmt::print_u8(joypad.status.*); fmt::print_str("\n");
-  joypad.status.* = joypad.status.* | mask;
+  joypad.status.* |= mask;
 }
 
 fn unpress(joypad: *Joypad, mask: u8) {
   // fmt::print_str("joypad unpressed, staus="); fmt::print_u8(joypad.status.*); fmt::print_str("\n");
-  joypad.status.* = joypad.status.* & ~mask;
+  joypad.status.* &= ~mask;
 }

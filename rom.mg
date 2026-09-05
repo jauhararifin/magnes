@@ -100,7 +100,7 @@ fn load(raw_bytes: [*]u8): ROM {
 
   let prg_start: usize = 16;
   if skip_trainer {
-    prg_start = prg_start + 512;
+    prg_start += 512;
   }
   let chr_start: usize = prg_start + prg_rom_size;
 
@@ -168,7 +168,7 @@ fn mapper_0_reset(rom: *ROM) {
 
 fn mapper_0_read_prg(rom: *ROM, addr: u16): u8 {
   if (rom.program_size.* == 0x4000) && (addr >= 0x4000) {
-    addr = addr & 0x3fff;
+    addr &= 0x3fff;
   }
   return rom.program.*[addr].*;
 }
@@ -193,10 +193,8 @@ let fallback_chr_rom: [*]u8 = mem::alloc_array::<u8>(0x2000);
 
 fn mapper_2_reset(rom: *ROM) {
   mapper_2_selected_bank = 0;
-  let i = 0;
-  while i < 0x2000 {
+  for let i = 0; i < 0x2000; i += 1 {
     fallback_chr_rom[i].* = 0;
-    i = i + 1;
   }
 }
 

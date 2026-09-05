@@ -15,9 +15,7 @@ fn print_str(p: [*]u8) {
 
 fn strlen(p: [*]u8): i32 {
   let i: i32 = 0;
-  while p[i].* != 0 {
-    i = i + 1;
-  }
+  for ; p[i].* != 0; i += 1 {}
   return i;
 }
 
@@ -38,23 +36,23 @@ fn print_i64(val: i64) {
   }
 
   let str = mem::alloc_array::<u8>(10);
+  defer mem::dealloc_array::<u8>(str);
   let str_n: usize = 0;
 
   let start: usize = 0;
   if val < 0 {
     str[str_n].* = 45; // ascii for '-'
-    str_n = str_n + 1;
+    str_n += 1;
     start = 1;
   }
 
-  while val != 0 {
+  for ; val != 0; val /= 10 {
     let d = val % 10;
     if d < 0 {
       d = -d;
     }
     str[str_n].* = 48 + d as u8; // 48 is ascii for '0'
-    str_n = str_n + 1;
-    val = val / 10;
+    str_n += 1;
   }
 
   let i: usize = start;
@@ -63,14 +61,13 @@ fn print_i64(val: i64) {
     let tmp = str[i].*;
     str[i].* = str[j].*;
     str[j].* = tmp;
-    i = i + 1;
-    j = j - 1;
+    i += 1;
+    j -= 1;
   }
 
   str[str_n].* = 0;
-  str_n = str_n + 1;
+  str_n += 1;
   print_str(str);
-  mem::dealloc_array::<u8>(str);
 }
 
 fn print_u64(val: u64) {
@@ -80,17 +77,17 @@ fn print_u64(val: u64) {
   }
 
   let str = mem::alloc_array::<u8>(10);
+  defer mem::dealloc_array::<u8>(str);
   let str_n: usize = 0;
 
-  while val != 0 {
+  for ; val != 0; val /= 16 {
     let d = val % 16;
     if d > 9 {
       str[str_n].* = 97 + (d as u8) - 10; // ascii for 'a'
     } else {
       str[str_n].* = 48 + (d as u8); // ascii for '0'
     }
-    str_n = str_n + 1;
-    val = val / 16;
+    str_n += 1;
   }
 
   let i: usize = 0;
@@ -99,15 +96,14 @@ fn print_u64(val: u64) {
     let tmp = str[i].*;
     str[i].* = str[j].*;
     str[j].* = tmp;
-    i = i + 1;
-    j = j - 1;
+    i += 1;
+    j -= 1;
   }
 
   str[str_n].* = 0;
-  str_n = str_n + 1;
+  str_n += 1;
   print_str("0x");
   print_str(str);
-  mem::dealloc_array::<u8>(str);
 }
 
 

@@ -21,7 +21,7 @@ fn init() {
     send_non_maskable_interrupt,
     read_chr_rom,
     write_chr_rom,
-  )
+  );
 }
 
 fn send_non_maskable_interrupt() {
@@ -37,10 +37,8 @@ fn write_chr_rom(addr: u16, data: u8) {
 }
 
 fn reset() {
-  let i = 0;
-  while i < 0x2000 {
+  for let i = 0; i < 0x2000; i += 1 {
     ram[i].* = 0;
-    i = i + 1;
   }
 }
 
@@ -100,11 +98,9 @@ fn write(addr: u16, data: u8) {
     ppu::set_register(the_ppu, (addr as u8) & 0x07, data);
   } else if addr == 0x4014 {
     let addr = (data as u16) << 8;
-    let i: u16 = 0;
-    while i < 256 {
+    for let i: u16 = 0; i < 256; i += 1 {
       let b = read(addr + i);
       ppu::write_oam(the_ppu, b);
-      i = i + 1;
     }
   } else if addr == 0x4016 {
     joypad::write(joypad_1, data);
