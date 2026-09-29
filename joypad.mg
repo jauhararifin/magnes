@@ -17,7 +17,7 @@ struct Joypad {
 }
 
 fn new(): *Joypad {
-  let p = mem::alloc::<Joypad>();
+  let p = mem.alloc<Joypad>();
   p.* = Joypad {
     strobe:   false,
     button_i: 0,
@@ -54,18 +54,18 @@ fn read(joypad: *Joypad): u8 {
     joypad.button_i.* = 0;
   }
 
-  // fmt::print_str("joypad read, result=");
-  // fmt::print_u8(result);
-  // fmt::print_str("\n");
+  // fmt.print_str("joypad read, result=");
+  // fmt.print_u8(result);
+  // fmt.print_str("\n");
   return result;
 }
 
 fn press(joypad: *Joypad, mask: u8) {
-  // fmt::print_str("joypad pressed, staus="); fmt::print_u8(joypad.status.*); fmt::print_str("\n");
+  // fmt.print_str("joypad pressed, staus="); fmt.print_u8(joypad.status.*); fmt.print_str("\n");
   joypad.status.* |= mask;
 }
 
 fn unpress(joypad: *Joypad, mask: u8) {
-  // fmt::print_str("joypad unpressed, staus="); fmt::print_u8(joypad.status.*); fmt::print_str("\n");
+  // fmt.print_str("joypad unpressed, staus="); fmt.print_u8(joypad.status.*); fmt.print_str("\n");
   joypad.status.* &= ~mask;
 }

@@ -38,9 +38,9 @@ fn load(raw_bytes: [*]u8): ROM {
 
   let mapper_id = (raw_bytes[7].* & 0xf0) | (raw_bytes[6].* >> 4);
   if debug {
-    fmt::print_str("program mapper = ");
-    fmt::print_u8(mapper_id);
-    fmt::print_str("\n");
+    fmt.print_str("program mapper = ");
+    fmt.print_u8(mapper_id);
+    fmt.print_str("\n");
   }
 
   let mapper: Mapper;
@@ -63,17 +63,17 @@ fn load(raw_bytes: [*]u8): ROM {
   if four_screen {
     mirroring = MIRRORING_FOUR_SCREEN;
     if debug {
-      fmt::print_str("mirroring=four screen\n");
+      fmt.print_str("mirroring=four screen\n");
     }
   } else if vertical_mirroring {
     mirroring = MIRRORING_VERTICAL;
     if debug {
-      fmt::print_str("mirroring=vertical\n");
+      fmt.print_str("mirroring=vertical\n");
     }
   } else {
     mirroring = MIRRORING_HORIZONTAL;
     if debug {
-      fmt::print_str("mirroring=horizontal\n");
+      fmt.print_str("mirroring=horizontal\n");
     }
   }
 
@@ -81,20 +81,20 @@ fn load(raw_bytes: [*]u8): ROM {
   let chr_rom_size = (raw_bytes[5].* as usize) * CHR_ROM_PAGE_SIZE;
 
   if debug {
-    fmt::print_str("program rom size = ");
-    fmt::print_usize(prg_rom_size);
-    fmt::print_str(", character rom size = ");
-    fmt::print_usize(chr_rom_size);
-    fmt::print_str("\n");
+    fmt.print_str("program rom size = ");
+    fmt.print_usize(prg_rom_size);
+    fmt.print_str(", character rom size = ");
+    fmt.print_usize(chr_rom_size);
+    fmt.print_str("\n");
   }
 
   let skip_trainer = (raw_bytes[6].* & 0b100) != 0;
 
   if debug {
     if skip_trainer {
-      fmt::print_str("skip_trainer = true\n");
+      fmt.print_str("skip_trainer = true\n");
     } else {
-      fmt::print_str("skip_trainer = false\n");
+      fmt.print_str("skip_trainer = false\n");
     }
   }
 
@@ -174,9 +174,9 @@ fn mapper_0_read_prg(rom: *ROM, addr: u16): u8 {
 }
 
 fn mapper_0_write_prg(rom: *ROM, addr: u16, data: u8) {
-  fmt::print_str("invalid write to ROM program at ");
-  fmt::print_u16(addr);
-  fmt::print_str("\n");
+  fmt.print_str("invalid write to ROM program at ");
+  fmt.print_u16(addr);
+  fmt.print_str("\n");
 }
 
 fn mapper_0_read_chr(rom: *ROM, addr: u16): u8 {
@@ -189,7 +189,7 @@ fn mapper_0_write_chr(rom: *ROM, addr: u16, data: u8) {
 
 // TODO: move this into local variable
 let mapper_2_selected_bank: u8 = 0;
-let fallback_chr_rom: [*]u8 = mem::alloc_array::<u8>(0x2000);
+let fallback_chr_rom: [*]u8 = mem.alloc_array<u8>(0x2000);
 
 fn mapper_2_reset(rom: *ROM) {
   mapper_2_selected_bank = 0;

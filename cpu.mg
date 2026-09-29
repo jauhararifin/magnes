@@ -17,7 +17,7 @@ struct CPU {
 }
 
 fn new(): *CPU {
-  let c = mem::alloc::<CPU>();
+  let c = mem.alloc<CPU>();
   c.* = CPU{};
   return c;
 }
@@ -149,7 +149,7 @@ struct Instruction {
 let instruction_map: [*]Instruction = init_instruction_map();
 
 fn init_instruction_map(): [*]Instruction {
-  let map = mem::alloc_array::<Instruction>(0x100);
+  let map = mem.alloc_array<Instruction>(0x100);
 
   map[0x00].* = Instruction{code: 0x00, opcode: OPCODE_BRK, handler: handle_instr_brk, addr_mode: ADDR_MODE_IMP, desc: "BRK:IMP", name: "BRK", cycle: 7};
   map[0x01].* = Instruction{code: 0x01, opcode: OPCODE_ORA, handler: handle_instr_ora, addr_mode: ADDR_MODE_X_INDIRECT, desc: "ORA:X_INDIRECT", name: "ORA", cycle: 6};
@@ -485,7 +485,7 @@ fn execute_next_instruction(cpu: *CPU): i32 {
 
   if debug {
     debug_u16(cpu.pc.*);
-    fmt::print_str("  ");
+    fmt.print_str("  ");
     debug_u8(opcode);
   }
 
@@ -500,40 +500,40 @@ fn execute_next_instruction(cpu: *CPU): i32 {
   let cross_page_boundary = false;
 
   if addr_mode == ADDR_MODE_IMP {
-    if debug { fmt::print_str("       "); }
+    if debug { fmt.print_str("       "); }
   } else if addr_mode == ADDR_MODE_A {
-    if debug { fmt::print_str("       "); }
+    if debug { fmt.print_str("       "); }
   } else if addr_mode == ADDR_MODE_IMM {
     addr = cpu.pc.*;
     cpu.pc.* += 1;
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
-      fmt::print_str("    ");
+      fmt.print_str("    ");
     }
   } else if addr_mode == ADDR_MODE_ZERO_PAGE {
     addr = cpu.fn_read.*(cpu.pc.*) as u16;
     cpu.pc.* += 1;
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8((addr as u8) & 0xff);
-      fmt::print_str("    ");
+      fmt.print_str("    ");
     }
   } else if addr_mode == ADDR_MODE_ZERO_PAGE_X {
     addr = (cpu.fn_read.*(cpu.pc.*) + cpu.x.*) as u16;
     cpu.pc.* += 1;
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
-      fmt::print_str("    ");
+      fmt.print_str("    ");
     }
   } else if addr_mode == ADDR_MODE_ZERO_PAGE_Y {
     addr = (cpu.fn_read.*(cpu.pc.*) + cpu.y.*) as u16;
     cpu.pc.* += 1;
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
-      fmt::print_str("    ");
+      fmt.print_str("    ");
     }
   } else if addr_mode == ADDR_MODE_REL {
     addr = ((cpu.fn_read.*(cpu.pc.*) as i8) as i16 + cpu.pc.* as i16 + 1) as u16;
@@ -544,19 +544,19 @@ fn execute_next_instruction(cpu: *CPU): i32 {
 
     cpu.pc.* += 1;
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
-      fmt::print_str("    ");
+      fmt.print_str("    ");
     }
   } else if addr_mode == ADDR_MODE_ABS {
     addr = mem_read_u16(cpu, cpu.pc.*);
     cpu.pc.* += 2;
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 2));
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
-      fmt::print_str(" ");
+      fmt.print_str(" ");
     }
   } else if addr_mode == ADDR_MODE_ABS_X {
     let base = mem_read_u16(cpu, cpu.pc.*);
@@ -568,11 +568,11 @@ fn execute_next_instruction(cpu: *CPU): i32 {
 
     cpu.pc.* += 2;
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 2));
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
-      fmt::print_str(" ");
+      fmt.print_str(" ");
     }
   } else if addr_mode == ADDR_MODE_ABS_Y {
     let base = mem_read_u16(cpu, cpu.pc.*);
@@ -584,11 +584,11 @@ fn execute_next_instruction(cpu: *CPU): i32 {
 
     cpu.pc.* += 2;
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 2));
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
-      fmt::print_str(" ");
+      fmt.print_str(" ");
     }
   } else if addr_mode == ADDR_MODE_INDIRECT {
     addr = mem_read_u16(cpu, cpu.pc.*);
@@ -605,11 +605,11 @@ fn execute_next_instruction(cpu: *CPU): i32 {
     addr = (hi as u16 << 8) | (lo as u16);
 
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 2));
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
-      fmt::print_str(" ");
+      fmt.print_str(" ");
     }
   } else if addr_mode == ADDR_MODE_X_INDIRECT {
     let ptr = cpu.fn_read.*(cpu.pc.*) + cpu.x.*;
@@ -618,9 +618,9 @@ fn execute_next_instruction(cpu: *CPU): i32 {
     let hi = cpu.fn_read.*(((ptr+1) & 0xff) as u16);
     addr = (hi as u16 << 8) | (lo as u16);
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
-      fmt::print_str("    ");
+      fmt.print_str("    ");
     }
   } else if addr_mode == ADDR_MODE_INDIRECT_Y {
     let ptr = cpu.fn_read.*(cpu.pc.*);
@@ -635,44 +635,44 @@ fn execute_next_instruction(cpu: *CPU): i32 {
     }
 
     if debug {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
       debug_u8(cpu.fn_read.*(cpu.pc.* - 1));
-      fmt::print_str("    ");
+      fmt.print_str("    ");
     }
   }
 
   if debug {
     if ins.illegal.* {
-      fmt::print_str("*");
+      fmt.print_str("*");
     } else {
-      fmt::print_str(" ");
+      fmt.print_str(" ");
     }
-    fmt::print_str(ins.name.*);
-    // fmt::print_str(" addr=");
-    // fmt::print_u16(addr);
-    // fmt::print_str(" data=");
-    // fmt::print_u8(data);
+    fmt.print_str(ins.name.*);
+    // fmt.print_str(" addr=");
+    // fmt.print_u16(addr);
+    // fmt.print_str(" data=");
+    // fmt.print_u8(data);
 
-    fmt::print_str("  ");
-    fmt::print_str("A:");
+    fmt.print_str("  ");
+    fmt.print_str("A:");
     debug_u8(cpu.a.*);
-    fmt::print_str(" X:");
+    fmt.print_str(" X:");
     debug_u8(cpu.x.*);
-    fmt::print_str(" Y:");
+    fmt.print_str(" Y:");
     debug_u8(cpu.y.*);
-    fmt::print_str(" P:");
+    fmt.print_str(" P:");
     debug_u8(cpu.status.*);
-    fmt::print_str(" SP:");
+    fmt.print_str(" SP:");
     debug_u8(cpu.sp.*);
-    // if (cpu.status.* & FLAG_MASK_CARRY) != 0 { fmt::print_str("C"); } else { fmt::print_str("-"); }
-    // if (cpu.status.* & FLAG_MASK_ZERO) != 0 { fmt::print_str("Z"); } else { fmt::print_str("-"); }
-    // if (cpu.status.* & FLAG_MASK_INTERRUPT_DISABLE) != 0 { fmt::print_str("I"); } else { fmt::print_str("-"); }
-    // if (cpu.status.* & FLAG_MASK_DECIMAL) != 0 { fmt::print_str("D"); } else { fmt::print_str("-"); }
-    // if (cpu.status.* & FLAG_MASK_BREAK) != 0 { fmt::print_str("B"); } else { fmt::print_str("-"); }
-    // if (cpu.status.* & FLAG_MASK_1) != 0 { fmt::print_str("1"); } else { fmt::print_str("-"); }
-    // if (cpu.status.* & FLAG_MASK_OVERFLOW) != 0 { fmt::print_str("V"); } else { fmt::print_str("-"); }
-    // if (cpu.status.* & FLAG_MASK_NEGATIVE) != 0 { fmt::print_str("N"); } else { fmt::print_str("-"); }
-    fmt::print_str("\n");
+    // if (cpu.status.* & FLAG_MASK_CARRY) != 0 { fmt.print_str("C"); } else { fmt.print_str("-"); }
+    // if (cpu.status.* & FLAG_MASK_ZERO) != 0 { fmt.print_str("Z"); } else { fmt.print_str("-"); }
+    // if (cpu.status.* & FLAG_MASK_INTERRUPT_DISABLE) != 0 { fmt.print_str("I"); } else { fmt.print_str("-"); }
+    // if (cpu.status.* & FLAG_MASK_DECIMAL) != 0 { fmt.print_str("D"); } else { fmt.print_str("-"); }
+    // if (cpu.status.* & FLAG_MASK_BREAK) != 0 { fmt.print_str("B"); } else { fmt.print_str("-"); }
+    // if (cpu.status.* & FLAG_MASK_1) != 0 { fmt.print_str("1"); } else { fmt.print_str("-"); }
+    // if (cpu.status.* & FLAG_MASK_OVERFLOW) != 0 { fmt.print_str("V"); } else { fmt.print_str("-"); }
+    // if (cpu.status.* & FLAG_MASK_NEGATIVE) != 0 { fmt.print_str("N"); } else { fmt.print_str("-"); }
+    fmt.print_str("\n");
   }
 
   let handler = ins.handler.*;
@@ -1448,12 +1448,12 @@ fn handle_instr_arr(cpu: *CPU, mode: u8, addr: u16): i32 {
 }
 
 fn handle_instr_ane(cpu: *CPU, mode: u8, addr: u16): i32 {
-  wasm::trap();
+  wasm.trap();
   return 0;
 }
 
 fn handle_instr_tas(cpu: *CPU, mode: u8, addr: u16): i32 {
-  wasm::trap();
+  wasm.trap();
   return 0;
 }
 
@@ -1470,7 +1470,7 @@ fn handle_instr_shx(cpu: *CPU, mode: u8, addr: u16): i32 {
 }
 
 fn handle_instr_sha(cpu: *CPU, mode: u8, addr: u16): i32 {
-  wasm::trap();
+  wasm.trap();
   return 0;
 }
 
@@ -1485,7 +1485,7 @@ fn handle_instr_lxa(cpu: *CPU, mode: u8, addr: u16): i32 {
 }
 
 fn handle_instr_las(cpu: *CPU, mode: u8, addr: u16): i32 {
-  wasm::trap();
+  wasm.trap();
   return 0;
 }
 
@@ -1507,7 +1507,7 @@ fn handle_instr_sbx(cpu: *CPU, mode: u8, addr: u16): i32 {
 }
 
 
-let s: [*]u8 = mem::alloc_array::<u8>(5);
+let s: [*]u8 = mem.alloc_array<u8>(5);
 fn debug_u16(val: u16) {
   let i = 0;
   while i < 4 {
@@ -1520,7 +1520,7 @@ fn debug_u16(val: u16) {
     val >>= 4;
   }
   s[4].* = 0;
-  fmt::print_str(s);
+  fmt.print_str(s);
 }
 
 fn debug_u8(val: u8) {
@@ -1535,5 +1535,5 @@ fn debug_u8(val: u8) {
     val >>= 4;
   }
   s[2].* = 0;
-  fmt::print_str(s);
+  fmt.print_str(s);
 }

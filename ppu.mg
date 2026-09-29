@@ -121,22 +121,22 @@ struct Debug {
 }
 
 fn new(): *PPU {
-  let p = mem::alloc::<PPU>();
+  let p = mem.alloc<PPU>();
 
   // tile framebuffer stores 2 banks of 256 tile of 8x8 pixels of RGBa channel
   // so the size is 2*256*8*8 = 0x8000
-  p.debug.tile_framebuffer.*        = mem::alloc_array::<Color>(0x8000);
-  p.debug.palette_framebuffer.*     = mem::alloc_array::<Color>(1 + 4*4 + 4*4);
-  p.debug.nametable_1_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
-  p.debug.nametable_2_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
-  p.debug.nametable_3_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
-  p.debug.nametable_4_framebuffer.* = mem::alloc_array::<Color>(256 * 256);
-  p.vram.*                          = mem::alloc_array::<u8>(0x800);
-  p.palette.*                       = mem::alloc_array::<u8>(0x20);
-  p.oam.*                           = mem::alloc_array::<u8>(64 * 4);
+  p.debug.tile_framebuffer.*        = mem.alloc_array<Color>(0x8000);
+  p.debug.palette_framebuffer.*     = mem.alloc_array<Color>(1 + 4*4 + 4*4);
+  p.debug.nametable_1_framebuffer.* = mem.alloc_array<Color>(256 * 256);
+  p.debug.nametable_2_framebuffer.* = mem.alloc_array<Color>(256 * 256);
+  p.debug.nametable_3_framebuffer.* = mem.alloc_array<Color>(256 * 256);
+  p.debug.nametable_4_framebuffer.* = mem.alloc_array<Color>(256 * 256);
+  p.vram.*                          = mem.alloc_array<u8>(0x800);
+  p.palette.*                       = mem.alloc_array<u8>(0x20);
+  p.oam.*                           = mem.alloc_array<u8>(64 * 4);
   p.oam_addr.*                      = 0;
-  p.screen_framebuffer.*            = mem::alloc_array::<Color>(256 * 256); // technically only 256 x 240 is used
-  p.background_mask.*               = mem::alloc_array::<u8>(256 * 256); // technically only 256 x 240 is used
+  p.screen_framebuffer.*            = mem.alloc_array<Color>(256 * 256); // technically only 256 x 240 is used
+  p.background_mask.*               = mem.alloc_array<u8>(256 * 256); // technically only 256 x 240 is used
 
   reset(p);
   return p;
@@ -153,7 +153,7 @@ fn wire(
   ppu.fn_write_chr.*                      = fn_write_chr_rom;
 }
 
-fn load_rom(ppu: *PPU, cart: *rom::ROM) {
+fn load_rom(ppu: *PPU, cart: *rom.ROM) {
   ppu.mirroring.* = cart.mirroring.*;
 
   update_debug_chr_tile(ppu);
@@ -195,16 +195,16 @@ fn tick(ppu: *PPU, cycles: i64) {
   ppu.cycles.* += cycles as i32;
 
   while ppu.cycles.* >= 341 {
-    // fmt::print_str("scanline=");
-    // fmt::print_i32(ppu.scanline.*);
-    // fmt::print_str("scroll_x=");
-    // fmt::print_u8(ppu.scroll_x.*);
-    // fmt::print_str(",scroll_y=");
-    // fmt::print_u8(ppu.scroll_y.*);
-    // fmt::print_str(",selected_nametable=");
+    // fmt.print_str("scanline=");
+    // fmt.print_i32(ppu.scanline.*);
+    // fmt.print_str("scroll_x=");
+    // fmt.print_u8(ppu.scroll_x.*);
+    // fmt.print_str(",scroll_y=");
+    // fmt.print_u8(ppu.scroll_y.*);
+    // fmt.print_str(",selected_nametable=");
     // let selected_nametable: u8 = (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_1) | (ppu.reg.control.* & CONTROL_FLAG_NAMETABLE_2);
-    // fmt::print_u8(selected_nametable);
-    // fmt::print_str("\n");
+    // fmt.print_u8(selected_nametable);
+    // fmt.print_str("\n");
 
     let is_zero_hit = false;
     if ppu.scanline.* < 240 {
@@ -215,17 +215,17 @@ fn tick(ppu: *PPU, cycles: i64) {
     }
 
     if is_zero_hit {
-      // fmt::print_str("zero hit on scanline=");
-      // fmt::print_i32(ppu.scanline.* as i32);
-      // fmt::print_str(",scroll_x=");
-      // fmt::print_u8(ppu.scroll_x.*);
-      // fmt::print_str(",scroll_y=");
-      // fmt::print_u8(ppu.scroll_y.*);
-      // fmt::print_str(",sprite0_x=");
-      // fmt::print_u8(ppu.oam.*[3].*);
-      // fmt::print_str(",sprite0_y=");
-      // fmt::print_u8(ppu.oam.*[0].*);
-      // fmt::print_str("\n");
+      // fmt.print_str("zero hit on scanline=");
+      // fmt.print_i32(ppu.scanline.* as i32);
+      // fmt.print_str(",scroll_x=");
+      // fmt.print_u8(ppu.scroll_x.*);
+      // fmt.print_str(",scroll_y=");
+      // fmt.print_u8(ppu.scroll_y.*);
+      // fmt.print_str(",sprite0_x=");
+      // fmt.print_u8(ppu.oam.*[3].*);
+      // fmt.print_str(",sprite0_y=");
+      // fmt.print_u8(ppu.oam.*[0].*);
+      // fmt.print_str("\n");
       ppu.reg.status.* |= STATUS_FLAG_ZERO_HIT;
     }
 
@@ -258,11 +258,11 @@ fn render(ppu: *PPU) {
 }
 
 fn set_register(ppu: *PPU, id: u8, data: u8) {
-  // fmt::print_str("set_register id=");
-  // fmt::print_u8(id);
-  // fmt::print_str(",data=");
-  // fmt::print_u8(data);
-  // fmt::print_str("\n");
+  // fmt.print_str("set_register id=");
+  // fmt.print_u8(id);
+  // fmt.print_str(",data=");
+  // fmt.print_u8(data);
+  // fmt.print_str("\n");
 
   if id == 0 {
     let old_nmi_status = (ppu.reg.control.* & CONTROL_FLAG_NMI) != 0;
@@ -275,8 +275,8 @@ fn set_register(ppu: *PPU, id: u8, data: u8) {
   } else if id == 1 {
     ppu.reg.mask.* = data;
   } else if id == 2 {
-    fmt::print_str("register 2 is read only\n");
-    wasm::trap();
+    fmt.print_str("register 2 is read only\n");
+    wasm.trap();
   } else if id == 3 {
     ppu.oam_addr.* = data;
   } else if id == 4 {
@@ -293,18 +293,18 @@ fn set_register(ppu: *PPU, id: u8, data: u8) {
   } else if id == 7 {
     write_data(ppu, data);
   } else {
-    fmt::print_str("setting invalid register id ");
-    fmt::print_u8(id);
-    fmt::print_str("\n");
-    wasm::trap();
+    fmt.print_str("setting invalid register id ");
+    fmt.print_u8(id);
+    fmt.print_str("\n");
+    wasm.trap();
   }
 }
 
 fn get_register(ppu: *PPU, id: u8): u8 {
   if id == 0 {
-    fmt::print_str("register 0 is write only\n"); wasm::trap();
+    fmt.print_str("register 0 is write only\n"); wasm.trap();
   } else if id == 1 {
-    fmt::print_str("register 1 is write only\n"); wasm::trap();
+    fmt.print_str("register 1 is write only\n"); wasm.trap();
   } else if id == 2 {
     let reg = ppu.reg.status.*;
     ppu.reg.status.* = reg & ~STATUS_FLAG_VBLANK_STARTED;
@@ -312,20 +312,20 @@ fn get_register(ppu: *PPU, id: u8): u8 {
     ppu.is_reading_lo.* = false;
     return reg;
   } else if id == 3 {
-    fmt::print_str("register 3 is write only\n"); wasm::trap();
+    fmt.print_str("register 3 is write only\n"); wasm.trap();
   } else if id == 4 {
     return ppu.oam.*[ppu.oam_addr.*].*;
   } else if id == 5 {
-    fmt::print_str("register 5 is write only\n"); wasm::trap();
+    fmt.print_str("register 5 is write only\n"); wasm.trap();
   } else if id == 6 {
-    fmt::print_str("register 6 is write only\n"); wasm::trap();
+    fmt.print_str("register 6 is write only\n"); wasm.trap();
   } else if id == 7 {
     return read_data(ppu);
   } else {
-    fmt::print_str("setting invalid register id ");
-    fmt::print_u8(id);
-    fmt::print_str("\n");
-    wasm::trap();
+    fmt.print_str("setting invalid register id ");
+    fmt.print_u8(id);
+    fmt.print_str("\n");
+    wasm.trap();
   }
 
   return 0;
@@ -364,8 +364,8 @@ fn read_data(ppu: *PPU): u8 {
     ppu.data.* = ppu.vram.*[addr].*;
     return data;
   } else if addr < 0x3f00 {
-    fmt::print_str("should be impossible");
-    wasm::trap();
+    fmt.print_str("should be impossible");
+    wasm.trap();
   } else if addr < 0x4000 {
     // addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
     // source: https://www.nesdev.org/wiki/PPU_palettes
@@ -377,8 +377,8 @@ fn read_data(ppu: *PPU): u8 {
     }
     return ppu.palette.*[addr-0x3f00].*;
   } else {
-    fmt::print_str("reading addr above 3f00\n");
-    wasm::trap();
+    fmt.print_str("reading addr above 3f00\n");
+    wasm.trap();
   }
 
   return 0;
@@ -390,7 +390,7 @@ fn mirror_vram(mirroring: u8, index: u16): u16 {
   // 0 1
   // 2 3
   let name_table = index / 0x400;
-  if mirroring == rom::MIRRORING_HORIZONTAL {
+  if mirroring == rom.MIRRORING_HORIZONTAL {
     // [A][a]
     // [B][b]
     if name_table == 1 || name_table == 2 {
@@ -400,7 +400,7 @@ fn mirror_vram(mirroring: u8, index: u16): u16 {
     } else {
       return index;
     }
-  } else if mirroring == rom::MIRRORING_VERTICAL {
+  } else if mirroring == rom.MIRRORING_VERTICAL {
     // [A][B]
     // [a][b]
     if name_table == 2 || name_table == 3 {
@@ -408,7 +408,7 @@ fn mirror_vram(mirroring: u8, index: u16): u16 {
     } else {
       return index;
     }
-  } else if mirroring == rom::MIRRORING_FOUR_SCREEN {
+  } else if mirroring == rom.MIRRORING_FOUR_SCREEN {
     // [A][B]
     // [C][D]
     return index;
@@ -421,11 +421,11 @@ fn mirror_vram(mirroring: u8, index: u16): u16 {
 
 fn write_data(ppu: *PPU, data: u8) {
   let addr = get_addr(ppu);
-  // fmt::print_str("write data to ppu ");
-  // fmt::print_u16(addr);
-  // fmt::print_str(", data=");
-  // fmt::print_u8(data);
-  // fmt::print_str("\n");
+  // fmt.print_str("write data to ppu ");
+  // fmt.print_u16(addr);
+  // fmt.print_str(", data=");
+  // fmt.print_u8(data);
+  // fmt.print_str("\n");
   inc_addr(ppu);
 
   if addr >= 0x3000 && addr < 0x3f00 {
@@ -438,14 +438,14 @@ fn write_data(ppu: *PPU, data: u8) {
     let addr = mirror_vram(ppu.mirroring.*, addr - 0x2000);
     ppu.vram.*[addr].* = data;
   } else if addr < 0x3f00 {
-    fmt::print_str("should be impossible\n");
-    wasm::trap();
+    fmt.print_str("should be impossible\n");
+    wasm.trap();
   } else if addr < 0x4000 {
-    // fmt::print_str("write to palettte addr=");
-    // fmt::print_u16(addr);
-    // fmt::print_str(",data=");
-    // fmt::print_u8(data);
-    // fmt::print_str("\n");
+    // fmt.print_str("write to palettte addr=");
+    // fmt.print_u16(addr);
+    // fmt.print_str(",data=");
+    // fmt.print_u8(data);
+    // fmt.print_str("\n");
 
     // addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
     // source: https://www.nesdev.org/wiki/PPU_palettes
@@ -460,8 +460,8 @@ fn write_data(ppu: *PPU, data: u8) {
     let color = get_color(data);
     ppu.debug.palette_framebuffer.*[addr-0x3f00].* = color;
   } else {
-    fmt::print_str("writing addr above 0x4000\n");
-    wasm::trap();
+    fmt.print_str("writing addr above 0x4000\n");
+    wasm.trap();
   }
 }
 
@@ -501,7 +501,7 @@ struct Color {
 let palette: [*]Color = init_palette();
 
 fn init_palette(): [*]Color {
-  let map = mem::alloc_array::<Color>(0x40);
+  let map = mem.alloc_array<Color>(0x40);
 
   map[ 0].* = Color{r: 0x80, g: 0x80, b: 0x80, a: 0xff};
   map[ 1].* = Color{r: 0x00, g: 0x3D, b: 0xA6, a: 0xff};
@@ -735,8 +735,8 @@ fn render_background(ppu: *PPU, y: i32): bool {
   let sprite0_y = ppu.oam.*[0].* as i32 + 1;
   let sprite0_tile_id = ppu.oam.*[1].* as u16;
   let sprite0_y_offset = y - sprite0_y;
-  let sprite0_x_color: [*]u8 = mem::alloc_array::<u8>(8);
-  defer mem::dealloc_array::<u8>(sprite0_x_color);
+  let sprite0_x_color: [*]u8 = mem.alloc_array<u8>(8);
+  defer mem.dealloc_array<u8>(sprite0_x_color);
   sprite0_x_color[0].* = 0;
   sprite0_x_color[1].* = 0;
   sprite0_x_color[2].* = 0;
@@ -979,13 +979,13 @@ fn render_objects(ppu: *PPU) {
       continue;
     }
 
-    // fmt::print_str("render object x=");
-    // fmt::print_i32(x as i32);
-    // fmt::print_str(" y=");
-    // fmt::print_i32(y as i32);
-    // fmt::print_str(" tile_id=");
-    // fmt::print_u16(tile_id);
-    // fmt::print_str("\n");
+    // fmt.print_str("render object x=");
+    // fmt.print_i32(x as i32);
+    // fmt.print_str(" y=");
+    // fmt.print_i32(y as i32);
+    // fmt.print_str(" tile_id=");
+    // fmt.print_u16(tile_id);
+    // fmt.print_str("\n");
 
     let pattern_addr: u16 = 0;
     if (ppu.reg.control.* & CONTROL_FLAG_SPRITE_PATTERN_ADDR) != 0 {
