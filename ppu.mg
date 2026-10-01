@@ -663,38 +663,38 @@ fn get_debug_palette_framebuffer(ppu: *PPU): DebugPalette {
       framebuffer: ppu.debug.palette_framebuffer.*[1] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     background_palette1: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[5] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     background_palette2: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[9] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     background_palette3: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[13] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
 
     sprite_palette0: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[17] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     sprite_palette1: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[21] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     sprite_palette2: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[25] as [*]Color,
       width: 4,
       height: 1,
-    }
+    },
     sprite_palette3: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[29] as [*]Color,
       width: 4,

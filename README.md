@@ -26,11 +26,11 @@ To compile this game, you must first install the Magelang compiler.
 
 ```bash
 # At the time of writing this project, Magelang has not been officially released.
-# The game was compiled using Magelang with this commit ID: c2a94650b34fa9ecc41acf3d517d014530c29f1e.
+# The game was compiled using Magelang with this commit ID: 553d799a3056ebe0214932d66f8d4915fde04a14.
 # Use this commit ID to install Magelang to ensure version compatibility.
 cargo install \
     --git https://github.com/jauhararifin/magelang.git \
-    --rev c2a94650b34fa9ecc41acf3d517d014530c29f1e \
+    --rev 553d799a3056ebe0214932d66f8d4915fde04a14 \
     magelang
 
 # Verify the installation
