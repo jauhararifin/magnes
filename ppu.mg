@@ -121,22 +121,22 @@ struct Debug {
 }
 
 fn new(): *PPU {
-  let p = mem.alloc<PPU>();
+  let p = mem.alloc[PPU]();
 
   // tile framebuffer stores 2 banks of 256 tile of 8x8 pixels of RGBa channel
   // so the size is 2*256*8*8 = 0x8000
-  p.debug.tile_framebuffer.*        = mem.alloc_array<Color>(0x8000);
-  p.debug.palette_framebuffer.*     = mem.alloc_array<Color>(1 + 4*4 + 4*4);
-  p.debug.nametable_1_framebuffer.* = mem.alloc_array<Color>(256 * 256);
-  p.debug.nametable_2_framebuffer.* = mem.alloc_array<Color>(256 * 256);
-  p.debug.nametable_3_framebuffer.* = mem.alloc_array<Color>(256 * 256);
-  p.debug.nametable_4_framebuffer.* = mem.alloc_array<Color>(256 * 256);
-  p.vram.*                          = mem.alloc_array<u8>(0x800);
-  p.palette.*                       = mem.alloc_array<u8>(0x20);
-  p.oam.*                           = mem.alloc_array<u8>(64 * 4);
+  p.debug.tile_framebuffer.*        = mem.alloc_array[Color](0x8000);
+  p.debug.palette_framebuffer.*     = mem.alloc_array[Color](1 + 4*4 + 4*4);
+  p.debug.nametable_1_framebuffer.* = mem.alloc_array[Color](256 * 256);
+  p.debug.nametable_2_framebuffer.* = mem.alloc_array[Color](256 * 256);
+  p.debug.nametable_3_framebuffer.* = mem.alloc_array[Color](256 * 256);
+  p.debug.nametable_4_framebuffer.* = mem.alloc_array[Color](256 * 256);
+  p.vram.*                          = mem.alloc_array[u8](0x800);
+  p.palette.*                       = mem.alloc_array[u8](0x20);
+  p.oam.*                           = mem.alloc_array[u8](64 * 4);
   p.oam_addr.*                      = 0;
-  p.screen_framebuffer.*            = mem.alloc_array<Color>(256 * 256); // technically only 256 x 240 is used
-  p.background_mask.*               = mem.alloc_array<u8>(256 * 256); // technically only 256 x 240 is used
+  p.screen_framebuffer.*            = mem.alloc_array[Color](256 * 256); // technically only 256 x 240 is used
+  p.background_mask.*               = mem.alloc_array[u8](256 * 256); // technically only 256 x 240 is used
 
   reset(p);
   return p;
@@ -501,7 +501,7 @@ struct Color {
 let palette: [*]Color = init_palette();
 
 fn init_palette(): [*]Color {
-  let map = mem.alloc_array<Color>(0x40);
+  let map = mem.alloc_array[Color](0x40);
 
   map[ 0].* = Color{r: 0x80, g: 0x80, b: 0x80, a: 0xff};
   map[ 1].* = Color{r: 0x00, g: 0x3D, b: 0xA6, a: 0xff};
@@ -735,8 +735,8 @@ fn render_background(ppu: *PPU, y: i32): bool {
   let sprite0_y = ppu.oam.*[0].* as i32 + 1;
   let sprite0_tile_id = ppu.oam.*[1].* as u16;
   let sprite0_y_offset = y - sprite0_y;
-  let sprite0_x_color: [*]u8 = mem.alloc_array<u8>(8);
-  defer mem.dealloc_array<u8>(sprite0_x_color);
+  let sprite0_x_color: [*]u8 = mem.alloc_array[u8](8);
+  defer mem.dealloc_array[u8](sprite0_x_color);
   sprite0_x_color[0].* = 0;
   sprite0_x_color[1].* = 0;
   sprite0_x_color[2].* = 0;

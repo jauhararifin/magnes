@@ -189,7 +189,7 @@ fn mapper_0_write_chr(rom: *ROM, addr: u16, data: u8) {
 
 // TODO: move this into local variable
 let mapper_2_selected_bank: u8 = 0;
-let fallback_chr_rom: [*]u8 = mem.alloc_array<u8>(0x2000);
+let fallback_chr_rom: [*]u8 = mem.alloc_array[u8](0x2000);
 
 fn mapper_2_reset(rom: *ROM) {
   mapper_2_selected_bank = 0;

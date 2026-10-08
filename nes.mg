@@ -34,7 +34,7 @@ fn tick(elapsed_ns: i64) {
   ppu.render(bus.the_ppu);
 }
 
-let rom_buffer: [*]u8 = mem.alloc_array<u8>(0x100000);
+let rom_buffer: [*]u8 = mem.alloc_array[u8](0x100000);
 @wasm_export("getRom")
 fn get_rom(): [*]u8 {
   return rom_buffer;

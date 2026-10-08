@@ -8,8 +8,8 @@ import joypad "joypad";
 
 let the_cpu: *cpu.CPU = cpu.new();
 let the_ppu: *ppu.PPU = ppu.new();
-let the_rom: *rom.ROM = mem.alloc<rom.ROM>();
-let ram: [*]u8 = mem.alloc_array<u8>(0x2000);
+let the_rom: *rom.ROM = mem.alloc[rom.ROM]();
+let ram: [*]u8 = mem.alloc_array[u8](0x2000);
 let debug: bool = false;
 let joypad_1: *joypad.Joypad = joypad.new();
 let joypad_2: *joypad.Joypad = joypad.new();

@@ -17,7 +17,7 @@ struct CPU {
 }
 
 fn new(): *CPU {
-  let c = mem.alloc<CPU>();
+  let c = mem.alloc[CPU]();
   c.* = CPU{};
   return c;
 }
@@ -149,7 +149,7 @@ struct Instruction {
 let instruction_map: [*]Instruction = init_instruction_map();
 
 fn init_instruction_map(): [*]Instruction {
-  let map = mem.alloc_array<Instruction>(0x100);
+  let map = mem.alloc_array[Instruction](0x100);
 
   map[0x00].* = Instruction{code: 0x00, opcode: OPCODE_BRK, handler: handle_instr_brk, addr_mode: ADDR_MODE_IMP, desc: "BRK:IMP", name: "BRK", cycle: 7};
   map[0x01].* = Instruction{code: 0x01, opcode: OPCODE_ORA, handler: handle_instr_ora, addr_mode: ADDR_MODE_X_INDIRECT, desc: "ORA:X_INDIRECT", name: "ORA", cycle: 6};
@@ -1507,7 +1507,7 @@ fn handle_instr_sbx(cpu: *CPU, mode: u8, addr: u16): i32 {
 }
 
 
-let s: [*]u8 = mem.alloc_array<u8>(5);
+let s: [*]u8 = mem.alloc_array[u8](5);
 fn debug_u16(val: u16) {
   let i = 0;
   while i < 4 {

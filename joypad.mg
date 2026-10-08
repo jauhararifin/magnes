@@ -17,7 +17,7 @@ struct Joypad {
 }
 
 fn new(): *Joypad {
-  let p = mem.alloc<Joypad>();
+  let p = mem.alloc[Joypad]();
   p.* = Joypad {
     strobe:   false,
     button_i: 0,

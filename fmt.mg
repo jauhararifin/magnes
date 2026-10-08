@@ -3,14 +3,14 @@ import mem "mem";
 
 fn print_str(p: [*]u8) {
   let len = strlen(p);
-  let iovec = mem.alloc<wasi.IoVec>();
+  let iovec = mem.alloc[wasi.IoVec]();
   iovec.* = wasi.IoVec{
     len: len,
     p:   p,
   };
 
   wasi.fd_write(1, iovec, 1, 0 as *i32);
-  mem.dealloc<wasi.IoVec>(iovec);
+  mem.dealloc[wasi.IoVec](iovec);
 }
 
 fn strlen(p: [*]u8): i32 {
@@ -35,8 +35,8 @@ fn print_i64(val: i64) {
     return;
   }
 
-  let str = mem.alloc_array<u8>(10);
-  defer mem.dealloc_array<u8>(str);
+  let str = mem.alloc_array[u8](10);
+  defer mem.dealloc_array[u8](str);
   let str_n: usize = 0;
 
   let start: usize = 0;
@@ -76,8 +76,8 @@ fn print_u64(val: u64) {
     return;
   }
 
-  let str = mem.alloc_array<u8>(10);
-  defer mem.dealloc_array<u8>(str);
+  let str = mem.alloc_array[u8](10);
+  defer mem.dealloc_array[u8](str);
   let str_n: usize = 0;
 
   for ; val != 0; val /= 16 {
