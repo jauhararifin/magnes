@@ -1,22 +1,12 @@
 import wasi "wasi";
 import mem "mem";
 
-fn print_str(p: [*]u8) {
-  let len = strlen(p);
-  let iovec = mem.alloc[wasi.IoVec]();
-  iovec.* = wasi.IoVec{
-    len: len,
-    p:   p,
-  };
+fn print_str(value: string) {
+  let iovec = mem.alloc[*[u8]]();
+  iovec.* = value;
 
   wasi.fd_write(1, iovec, 1, 0 as *i32);
-  mem.dealloc[wasi.IoVec](iovec);
-}
-
-fn strlen(p: [*]u8): i32 {
-  let i: i32 = 0;
-  for ; p[i].* != 0; i += 1 {}
-  return i;
+  mem.dealloc[*[u8]](iovec);
 }
 
 fn print_i8(val: i8) { print_i64(val as i64); }
@@ -65,9 +55,7 @@ fn print_i64(val: i64) {
     j -= 1;
   }
 
-  str[str_n].* = 0;
-  str_n += 1;
-  print_str(str);
+  print_str(string{ptr: str, len: str_n});
 }
 
 fn print_u64(val: u64) {
@@ -100,10 +88,8 @@ fn print_u64(val: u64) {
     j -= 1;
   }
 
-  str[str_n].* = 0;
-  str_n += 1;
   print_str("0x");
-  print_str(str);
+  print_str(string{ptr: str, len: str_n});
 }
 
 

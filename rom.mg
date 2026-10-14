@@ -13,7 +13,7 @@ let debug: bool = true;
 
 struct ROM {
   valid:      bool,
-  error:      [*]u8,
+  error:      string,
   program:    *[u8],
   characters: *[u8],
   mirroring:  u8,
@@ -110,7 +110,7 @@ fn load(raw_bytes: *[u8]): ROM {
 
   return ROM{
     valid:      true,
-    error:      0 as [*]u8,
+    error:      string{},
     program:    *[u8]{ptr: raw_bytes.ptr[prg_start] as [*]u8, len: prg_rom_size},
     characters: *[u8]{ptr: raw_bytes.ptr[chr_start] as [*]u8, len: chr_rom_size},
     mirroring:  mirroring,

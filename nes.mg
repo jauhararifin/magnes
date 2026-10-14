@@ -42,7 +42,7 @@ fn get_rom(): *[u8] {
 
 struct LoadRomResult {
   valid: bool,
-  error: [*]u8,
+  error: string,
 }
 
 @wasm_export("loadRom")
@@ -59,7 +59,7 @@ fn load_rom(size: usize): LoadRomResult {
 
   ppu.load_rom(bus.the_ppu, bus.the_rom);
 
-  return LoadRomResult{valid: true, error: 0 as [*]u8};
+  return LoadRomResult{valid: true, error: string{}};
 }
 
 @wasm_export("getRam")

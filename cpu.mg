@@ -137,8 +137,8 @@ struct Instruction {
   opcode:    u8,
   addr_mode: u8,
   handler:   fn(cpu: *CPU, addr_mode: u8, addr: u16): i32,
-  name:      [*]u8,
-  desc:      [*]u8,
+  name:      string,
+  desc:      string,
   illegal:   bool,
   cycle:     i32,
 
@@ -1519,8 +1519,7 @@ fn debug_u16(val: u16) {
     i += 1;
     val >>= 4;
   }
-  s[4].* = 0;
-  fmt.print_str(s);
+  fmt.print_str(string{ptr: s, len: 4});
 }
 
 fn debug_u8(val: u8) {
@@ -1534,6 +1533,5 @@ fn debug_u8(val: u8) {
     i += 1;
     val >>= 4;
   }
-  s[2].* = 0;
-  fmt.print_str(s);
+  fmt.print_str(string{ptr: s, len: 2});
 }
