@@ -34,9 +34,9 @@ fn tick(elapsed_ns: i64) {
   ppu.render(bus.the_ppu);
 }
 
-let rom_buffer: [*]u8 = mem.alloc_array[u8](0x100000);
+let rom_buffer: *[u8] = *[u8]{ptr: mem.alloc_array[u8](0x100000), len: 0x100000};
 @wasm_export("getRom")
-fn get_rom(): [*]u8 {
+fn get_rom(): *[u8] {
   return rom_buffer;
 }
 
@@ -46,8 +46,11 @@ struct LoadRomResult {
 }
 
 @wasm_export("loadRom")
-fn load_rom(): LoadRomResult {
-  let result = rom.load(rom_buffer);
+fn load_rom(size: usize): LoadRomResult {
+  if size > rom_buffer.len {
+    return LoadRomResult{valid: false, error: "ROM is too big"};
+  }
+  let result = rom.load(*[u8]{ptr: rom_buffer.ptr, len: size});
   if !result.valid {
     return LoadRomResult{valid: false, error: result.error};
   }

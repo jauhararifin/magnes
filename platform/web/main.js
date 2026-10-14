@@ -202,17 +202,17 @@ window.onload = async function() {
     reader.onload = function(e) {
       const arrayBuffer = e.target.result;
       const byteArray = new Uint8Array(arrayBuffer);
-      if (byteArray.length > 1073741824) {
+      const [offset, capacity] = getRom()
+      if (byteArray.length > capacity) {
         playing = false
         alert("ROM is too big")
         return
       }
 
-      const offset = getRom()
       const target = new Uint8Array(memoryBuffer)
       target.set(byteArray, offset)
 
-      const [resultIsValid, resultError] = loadRom();
+      const [resultIsValid, resultError] = loadRom(byteArray.length);
       if (!resultIsValid) {
         playing = false
         const message = getString(resultError);

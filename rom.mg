@@ -12,17 +12,18 @@ let CHR_ROM_PAGE_SIZE: usize = 0x2000;
 let debug: bool = true;
 
 struct ROM {
-  valid:           bool,
-  error:           [*]u8,
-  program:         [*]u8,
-  program_size:    usize,
-  characters:      [*]u8,
-  characters_size: usize,
-  mirroring:       u8,
-  mapper:          Mapper,
+  valid:      bool,
+  error:      [*]u8,
+  program:    *[u8],
+  characters: *[u8],
+  mirroring:  u8,
+  mapper:     Mapper,
 }
 
-fn load(raw_bytes: [*]u8): ROM {
+fn load(raw_bytes: *[u8]): ROM {
+  if raw_bytes.len < 16 {
+    return ROM{valid: false, error: "File is not a valid iNES file format"};
+  }
   if raw_bytes[0].* != 0x4e {
     return ROM{valid: false, error: "File is not a valid iNES file format"};
   }
@@ -103,16 +104,17 @@ fn load(raw_bytes: [*]u8): ROM {
     prg_start += 512;
   }
   let chr_start: usize = prg_start + prg_rom_size;
+  if chr_start + chr_rom_size > raw_bytes.len {
+    return ROM{valid: false, error: "File is smaller than its iNES header declares"};
+  }
 
   return ROM{
-    valid:           true,
-    error:           0 as [*]u8,
-    program:         raw_bytes[prg_start] as [*]u8,
-    program_size:    prg_rom_size,
-    characters:      raw_bytes[chr_start] as [*]u8,
-    characters_size: chr_rom_size,
-    mirroring:       mirroring,
-    mapper:          mapper,
+    valid:      true,
+    error:      0 as [*]u8,
+    program:    *[u8]{ptr: raw_bytes.ptr[prg_start] as [*]u8, len: prg_rom_size},
+    characters: *[u8]{ptr: raw_bytes.ptr[chr_start] as [*]u8, len: chr_rom_size},
+    mirroring:  mirroring,
+    mapper:     mapper,
   };
 }
 
@@ -167,7 +169,7 @@ fn mapper_0_reset(rom: *ROM) {
 }
 
 fn mapper_0_read_prg(rom: *ROM, addr: u16): u8 {
-  if (rom.program_size.* == 0x4000) && (addr >= 0x4000) {
+  if (rom.program.*.len == 0x4000) && (addr >= 0x4000) {
     addr &= 0x3fff;
   }
   return rom.program.*[addr].*;
@@ -200,7 +202,7 @@ fn mapper_2_reset(rom: *ROM) {
 
 fn mapper_2_read_prg(rom: *ROM, addr: u16): u8 {
   if addr >= 0x4000 {
-    return rom.program.*[rom.program_size.* - PRG_ROM_PAGE_SIZE + addr as usize - 0x4000].*;
+    return rom.program.*[rom.program.*.len - PRG_ROM_PAGE_SIZE + addr as usize - 0x4000].*;
   }
 
   return rom.program.*[mapper_2_selected_bank as usize * 0x4000 + addr as usize].*;
@@ -211,14 +213,14 @@ fn mapper_2_write_prg(rom: *ROM, addr: u16, data: u8) {
 }
 
 fn mapper_2_read_chr(rom: *ROM, addr: u16): u8 {
-  if rom.characters_size.* < addr as usize {
+  if addr as usize >= rom.characters.*.len {
     return fallback_chr_rom[addr].*;
   }
   return rom.characters.*[addr].*;
 }
 
 fn mapper_2_write_chr(rom: *ROM, addr: u16, data: u8) {
-  if rom.characters_size.* < addr as usize {
+  if addr as usize >= rom.characters.*.len {
     fallback_chr_rom[addr].* = data;
     return;
   }

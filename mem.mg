@@ -121,7 +121,7 @@ fn merge_left(header: *Header): *Header {
 
   let left_footer = (header as usize - padded_footer) as *Footer;
   let left_header = (left_footer as usize - left_footer.size.* - padded_header) as *Header;
-  if left_header as (usize) < lower_bound {
+  if left_header as usize < lower_bound {
     return 0 as *Header;
   }
   if left_header.is_used.* {
