@@ -2,11 +2,11 @@ import wasi "wasi";
 import mem "mem";
 
 fn print_str(value: string) {
-  let iovec = mem.alloc[*[u8]]();
+  let iovec = mem.alloc[wasi.IoVec]();
   iovec.* = value;
 
   wasi.fd_write(1, iovec, 1, 0 as *i32);
-  mem.dealloc[*[u8]](iovec);
+  mem.dealloc[wasi.IoVec](iovec);
 }
 
 fn print_i8(val: i8) { print_i64(val as i64); }
