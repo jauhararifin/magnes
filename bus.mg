@@ -6,15 +6,15 @@ import rom "rom";
 import ppu "ppu";
 import joypad "joypad";
 
-let the_cpu: *cpu.CPU = cpu.new();
-let the_ppu: *ppu.PPU = ppu.new();
-let the_rom: *rom.ROM = mem.alloc[rom.ROM]();
-let ram: [*]u8 = mem.alloc_array[u8](0x2000);
+pub let the_cpu: *cpu.CPU = cpu.new();
+pub let the_ppu: *ppu.PPU = ppu.new();
+pub let the_rom: *rom.ROM = mem.alloc[rom.ROM]();
+pub let ram: [*]u8 = mem.alloc_array[u8](0x2000);
 let debug: bool = false;
-let joypad_1: *joypad.Joypad = joypad.new();
-let joypad_2: *joypad.Joypad = joypad.new();
+pub let joypad_1: *joypad.Joypad = joypad.new();
+pub let joypad_2: *joypad.Joypad = joypad.new();
 
-fn init() {
+pub fn init() {
   cpu.wire(the_cpu, read, write);
   ppu.wire(
     the_ppu,
@@ -36,7 +36,7 @@ fn write_chr_rom(addr: u16, data: u8) {
   return rom.write_chr(the_rom, addr, data);
 }
 
-fn reset() {
+pub fn reset() {
   for let i = 0; i < 0x2000; i += 1 {
     ram[i].* = 0;
   }

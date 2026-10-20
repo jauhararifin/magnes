@@ -2,7 +2,7 @@ import wasm "wasm";
 import fmt "fmt";
 import mem "mem";
 
-struct CPU {
+pub struct CPU {
   fn_read:  fn(addr: u16): u8,
   fn_write: fn(addr: u16, data: u8),
 
@@ -16,13 +16,13 @@ struct CPU {
   interrupt_triggered: bool,
 }
 
-fn new(): *CPU {
+pub fn new(): *CPU {
   let c = mem.alloc[CPU]();
   c.* = CPU{};
   return c;
 }
 
-fn wire(
+pub fn wire(
   cpu:      *CPU,
   fn_read:  fn(addr: u16): u8,
   fn_write: fn(addr: u16, data: u8),
@@ -411,7 +411,7 @@ fn init_instruction_map(): [*]Instruction {
   return map;
 }
 
-fn reset(cpu: *CPU) {
+pub fn reset(cpu: *CPU) {
   cpu.a.* = 0;
   cpu.x.* = 0;
   cpu.y.* = 0;
@@ -450,7 +450,7 @@ fn interrupt(cpu: *CPU) {
   cpu.pc.* = hi << 8 | lo;
 }
 
-fn trigger_non_maskable_interrupt(cpu: *CPU) {
+pub fn trigger_non_maskable_interrupt(cpu: *CPU) {
   cpu.interrupt_triggered.* = true;
 }
 
@@ -471,7 +471,7 @@ fn non_maskable_interrupt(cpu: *CPU): i32 {
   return 7;
 }
 
-fn tick(cpu: *CPU): i32 {
+pub fn tick(cpu: *CPU): i32 {
   return execute_next_instruction(cpu);
 }
 

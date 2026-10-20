@@ -5,23 +5,23 @@ let upper_bound: usize = 0;
 let page_size: usize = 65536;
 let freelist_head: *Header = 0 as *Header;
 
-fn alloc[T](): *T {
+pub fn alloc[T](): *T {
   return alloc_size(wasm.size_of[T]()) as *T;
 }
 
-fn dealloc[T](p: *T) {
+pub fn dealloc[T](p: *T) {
   dealloc_from_ptr(p as usize);
 }
 
-fn alloc_array[T](len: usize): [*]T {
+pub fn alloc_array[T](len: usize): [*]T {
   return alloc_size(wasm.size_of[T]() * len) as [*]T;
 }
 
-fn dealloc_array[T](p: [*]T) {
+pub fn dealloc_array[T](p: [*]T) {
   dealloc_from_ptr(p as usize);
 }
 
-struct Header{
+struct Header {
   size: usize,
   prev: usize,
   next: usize,
@@ -43,7 +43,7 @@ let header_size: usize = wasm.size_of[Header]();
 //   - is_used
 // - padding
 
-struct Footer{
+struct Footer {
   size: usize,
   is_used: bool,
 }

@@ -2,25 +2,25 @@ import fmt "fmt";
 import wasm "wasm";
 import mem "mem";
 
-let MIRRORING_VERTICAL: u8 = 0;
-let MIRRORING_HORIZONTAL: u8 = 1;
-let MIRRORING_FOUR_SCREEN: u8 = 2;
+pub let MIRRORING_VERTICAL: u8 = 0;
+pub let MIRRORING_HORIZONTAL: u8 = 1;
+pub let MIRRORING_FOUR_SCREEN: u8 = 2;
 
 let PRG_ROM_PAGE_SIZE: usize = 0x4000;
 let CHR_ROM_PAGE_SIZE: usize = 0x2000;
 
 let debug: bool = true;
 
-struct ROM {
-  valid:      bool,
-  error:      string,
+pub struct ROM {
+  pub valid: bool,
+  pub error: string,
   program:    *[u8],
   characters: *[u8],
-  mirroring:  u8,
+  pub mirroring: u8,
   mapper:     Mapper,
 }
 
-fn load(raw_bytes: *[u8]): ROM {
+pub fn load(raw_bytes: *[u8]): ROM {
   if raw_bytes.len < 16 {
     return ROM{valid: false, error: "File is not a valid iNES file format"};
   }
@@ -118,23 +118,23 @@ fn load(raw_bytes: *[u8]): ROM {
   };
 }
 
-fn reset(rom: *ROM) {
+pub fn reset(rom: *ROM) {
   rom.mapper.reset.*(rom);
 }
 
-fn read_program(rom: *ROM, addr: u16): u8 {
+pub fn read_program(rom: *ROM, addr: u16): u8 {
   return rom.mapper.read_prg.*(rom, addr);
 }
 
-fn write_program(rom: *ROM, addr: u16, data: u8) {
+pub fn write_program(rom: *ROM, addr: u16, data: u8) {
   rom.mapper.write_prg.*(rom, addr, data);
 }
 
-fn read_chr(rom: *ROM, addr: u16): u8 {
+pub fn read_chr(rom: *ROM, addr: u16): u8 {
   return rom.mapper.read_chr.*(rom, addr);
 }
 
-fn write_chr(rom: *ROM, addr: u16, data: u8) {
+pub fn write_chr(rom: *ROM, addr: u16, data: u8) {
   rom.mapper.write_chr.*(rom, addr, data);
 }
 

@@ -1,7 +1,7 @@
 import wasi "wasi";
 import mem "mem";
 
-fn print_str(value: string) {
+pub fn print_str(value: string) {
   let iovec = mem.alloc[wasi.IoVec]();
   iovec.* = value;
 
@@ -11,13 +11,13 @@ fn print_str(value: string) {
 
 fn print_i8(val: i8) { print_i64(val as i64); }
 fn print_i16(val: i16) { print_i64(val as i64); }
-fn print_i32(val: i32) { print_i64(val as i64); }
+pub fn print_i32(val: i32) { print_i64(val as i64); }
 fn print_isize(val: isize) { print_i64(val as i64); }
 
-fn print_u8(val: u8) { print_u64(val as u64); }
-fn print_u16(val: u16) { print_u64(val as u64); }
+pub fn print_u8(val: u8) { print_u64(val as u64); }
+pub fn print_u16(val: u16) { print_u64(val as u64); }
 fn print_u32(val: u32) { print_u64(val as u64); }
-fn print_usize(val: usize) { print_u64(val as u64); }
+pub fn print_usize(val: usize) { print_u64(val as u64); }
 
 fn print_i64(val: i64) {
   if val == 0 {

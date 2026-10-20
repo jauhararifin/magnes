@@ -61,7 +61,7 @@ let MASK_FLAG_EMPHASIZE_RED: u8       = 1<<5;
 let MASK_FLAG_EMPHASIZE_GREEN: u8     = 1<<6;
 let MASK_FLAG_EMPHASIZE_BLUE: u8      = 1<<7;
 
-struct PPU {
+pub struct PPU {
   fn_trigger_non_maskable_interrupt: fn(),
   fn_read_chr:                       fn(addr: u16): u8,
   fn_write_chr:                      fn(addr: u16, data:u8),
@@ -98,7 +98,7 @@ struct PPU {
   screen_framebuffer: [*]Color,
   background_mask:    [*]u8,
 
-  debug: Debug,
+  pub debug: Debug,
 
   cycles:   i32,
   scanline: i32,
@@ -113,14 +113,14 @@ struct Register {
 struct Debug {
   tile_framebuffer:        [*]Color,
   palette_framebuffer:     [*]Color,
-  debug_palette_id:        u8,
+  pub debug_palette_id: u8,
   nametable_1_framebuffer: [*]Color,
   nametable_2_framebuffer: [*]Color,
   nametable_3_framebuffer: [*]Color,
   nametable_4_framebuffer: [*]Color,
 }
 
-fn new(): *PPU {
+pub fn new(): *PPU {
   let p = mem.alloc[PPU]();
 
   // tile framebuffer stores 2 banks of 256 tile of 8x8 pixels of RGBa channel
@@ -142,7 +142,7 @@ fn new(): *PPU {
   return p;
 }
 
-fn wire(
+pub fn wire(
   ppu:              *PPU,
   fn_trigger_nmi:   fn(),
   fn_read_chr_rom:  fn(addr: u16): u8,
@@ -153,13 +153,13 @@ fn wire(
   ppu.fn_write_chr.*                      = fn_write_chr_rom;
 }
 
-fn load_rom(ppu: *PPU, cart: *rom.ROM) {
+pub fn load_rom(ppu: *PPU, cart: *rom.ROM) {
   ppu.mirroring.* = cart.mirroring.*;
 
   update_debug_chr_tile(ppu);
 }
 
-fn reset(ppu: *PPU) {
+pub fn reset(ppu: *PPU) {
   ppu.reg.control.*   = 0;
   ppu.reg.status.*    = 0;
   ppu.addr_lo.*       = 0;
@@ -191,7 +191,7 @@ fn reset(ppu: *PPU) {
   }
 }
 
-fn tick(ppu: *PPU, cycles: i64) {
+pub fn tick(ppu: *PPU, cycles: i64) {
   ppu.cycles.* += cycles as i32;
 
   while ppu.cycles.* >= 341 {
@@ -247,7 +247,7 @@ fn tick(ppu: *PPU, cycles: i64) {
   }
 }
 
-fn render(ppu: *PPU) {
+pub fn render(ppu: *PPU) {
   render_objects(ppu);
   update_debug_chr_tile(ppu);
 
@@ -257,7 +257,7 @@ fn render(ppu: *PPU) {
   render_nametable(ppu, 3, ppu.debug.nametable_4_framebuffer.*);
 }
 
-fn set_register(ppu: *PPU, id: u8, data: u8) {
+pub fn set_register(ppu: *PPU, id: u8, data: u8) {
   // fmt.print_str("set_register id=");
   // fmt.print_u8(id);
   // fmt.print_str(",data=");
@@ -300,7 +300,7 @@ fn set_register(ppu: *PPU, id: u8, data: u8) {
   }
 }
 
-fn get_register(ppu: *PPU, id: u8): u8 {
+pub fn get_register(ppu: *PPU, id: u8): u8 {
   if id == 0 {
     fmt.print_str("register 0 is write only\n"); wasm.trap();
   } else if id == 1 {
@@ -486,7 +486,7 @@ fn get_addr(ppu: *PPU): u16 {
   return addr;
 }
 
-fn write_oam(ppu: *PPU, data: u8) {
+pub fn write_oam(ppu: *PPU, data: u8) {
   ppu.oam.*[ppu.oam_addr.*].* = data;
   ppu.oam_addr.* += 1;
 }
@@ -578,7 +578,7 @@ fn get_color(id: u8): Color {
   return palette[id].*;
 }
 
-fn get_debug_tile_framebuffer(ppu: *PPU): Image {
+pub fn get_debug_tile_framebuffer(ppu: *PPU): Image {
   return Image {
     framebuffer: ppu.debug.tile_framebuffer.*,
     width:       32*8,
@@ -631,13 +631,13 @@ fn set_debug_color(ppu: *PPU, pixel: *Color, color_id: u8) {
   pixel.* = palette[c].*;
 }
 
-struct Image {
+pub struct Image {
   framebuffer: [*]Color,
   width:       usize,
   height:      usize,
 }
 
-struct DebugPalette {
+pub struct DebugPalette {
   none: Image,
 
   background_palette0: Image,
@@ -651,7 +651,7 @@ struct DebugPalette {
   sprite_palette3: Image,
 }
 
-fn get_debug_palette_framebuffer(ppu: *PPU): DebugPalette {
+pub fn get_debug_palette_framebuffer(ppu: *PPU): DebugPalette {
   return DebugPalette {
     none: Image{
       framebuffer: ppu.debug.palette_framebuffer.*[0] as [*]Color,
@@ -854,7 +854,7 @@ fn set_background_color(ppu: *PPU, palette_id: u8, pixel: *Color, color_offset: 
   pixel.* = palette[color_idx].*;
 }
 
-fn get_screen_framebuffer(ppu: *PPU): Image {
+pub fn get_screen_framebuffer(ppu: *PPU): Image {
   return Image{
     framebuffer: ppu.screen_framebuffer.*,
     width:       32*8,
@@ -920,7 +920,7 @@ fn render_nametable(ppu: *PPU, nametable: u8, framebuffer: [*]Color) {
   }
 }
 
-fn get_nametable_1_framebuffer(ppu: *PPU): Image {
+pub fn get_nametable_1_framebuffer(ppu: *PPU): Image {
   return Image{
     framebuffer: ppu.debug.nametable_1_framebuffer.*,
     width:       32*8,
@@ -928,7 +928,7 @@ fn get_nametable_1_framebuffer(ppu: *PPU): Image {
   };
 }
 
-fn get_nametable_2_framebuffer(ppu: *PPU): Image {
+pub fn get_nametable_2_framebuffer(ppu: *PPU): Image {
   return Image{
     framebuffer: ppu.debug.nametable_2_framebuffer.*,
     width:       32*8,
@@ -936,7 +936,7 @@ fn get_nametable_2_framebuffer(ppu: *PPU): Image {
   };
 }
 
-fn get_nametable_3_framebuffer(ppu: *PPU): Image {
+pub fn get_nametable_3_framebuffer(ppu: *PPU): Image {
   return Image{
     framebuffer: ppu.debug.nametable_3_framebuffer.*,
     width:       32*8,
@@ -944,7 +944,7 @@ fn get_nametable_3_framebuffer(ppu: *PPU): Image {
   };
 }
 
-fn get_nametable_4_framebuffer(ppu: *PPU): Image {
+pub fn get_nametable_4_framebuffer(ppu: *PPU): Image {
   return Image{
     framebuffer: ppu.debug.nametable_4_framebuffer.*,
     width:       32*8,

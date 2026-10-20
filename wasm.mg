@@ -2,7 +2,7 @@
 fn data_end(): usize;
 
 @intrinsic("size_of")
-fn size_of[T](): usize;
+pub fn size_of[T](): usize;
 
 @intrinsic("align_of")
 fn align_of[T](): usize;
@@ -11,10 +11,10 @@ fn align_of[T](): usize;
 fn memory_size(): usize;
 
 @intrinsic("memory.grow")
-fn memory_grow(sz: usize): usize;
+pub fn memory_grow(sz: usize): usize;
 
 @intrinsic("unreachable")
-fn trap();
+pub fn trap();
 
 @intrinsic("f32.floor")
 fn floor_f32(v: f32): f32;
